@@ -246,3 +246,18 @@ with MarketReplayStore("data/market-replay.sqlite3") as store:
 ```
 
 Replay uses the **original scan clock**, not the current time, so a previously fresh book does not become stale merely because replay occurs later. Replay is deterministic for the persisted scanner inputs/configuration and code version; it is not a promise that a live opportunity would have filled. The store does not persist exchange credentials, query exchanges, or submit orders. SHA-256 detects accidental corruption but is not tamper-proof against someone who can modify the SQLite database and recompute the digest. Preserve the database and code revision together for auditability. Schema/version errors and checksum mismatches fail closed.
+
+
+## Paper-trading reporting
+
+Use `PaperTradeStore.record(..., strategy="classic-spot-spot")` and pass the
+same strategy label to `record_rejection(...)` so evaluation can compare
+outcomes and rejections by strategy, symbol, venue pair, and UTC day. Example
+and metric definitions: [docs/reporting.md](docs/reporting.md).
+
+`build_report` filters by the event's UTC `recorded_at` timestamp over the
+start-inclusive/end-exclusive interval. It reports fees and estimated slippage
+as separate diagnostic columns; do not subtract them a second time from
+`net_pnl`. Reports flag a possibly truncated result when the configured
+per-table query limit is reached. Historical audit rows are retained during
+the additive strategy-column migration and are labelled `unspecified`.
