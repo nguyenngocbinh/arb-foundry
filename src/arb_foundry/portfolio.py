@@ -6,10 +6,10 @@ it never connects to an exchange, transfers funds, or submits orders.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from collections.abc import Mapping
 
 from arb_foundry.errors import DataValidationError
 from arb_foundry.paper import PaperFillStatus, PaperTradeResult
