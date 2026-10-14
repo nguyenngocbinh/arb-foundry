@@ -13,7 +13,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, paper-trade audit events, and versioned SQLite portfolio snapshots are implemented. Full order-book replay, latency modelling, persistent health history, and live runtime/service wiring remain open. This is not a trading bot.
+Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, paper-trade audit events, and versioned SQLite portfolio snapshots are implemented. Deterministic scanner replay from checksummed SQLite market snapshots is implemented; strategy-level reporting, latency modelling, persistent health history, and live runtime/service wiring remain open. This is not a trading bot.
 
 See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations.
 
@@ -217,3 +217,32 @@ with PortfolioStateStore(database) as store:
 Important: `apply_trade_and_save` is the safe durable path for accounting. It computes a candidate state, commits its snapshot, then updates the supplied in-memory ledger. If validation or SQLite commit fails, that ledger remains unchanged. It does not run the risk engine for you; call it only after the paper result and risk decision are accepted. Save again after a valuation if you need the updated peak-equity watermark to survive restart.
 
 Snapshots are append-only at the application API. A SHA-256 checksum detects accidental payload changes, but is not a cryptographic signature and cannot prevent an actor with database write access from rewriting both payload and checksum. Back up the SQLite file, restrict write access, and treat checksum failures as a stop-and-investigate condition. This store persists portfolio state only; full order-book replay, strategy-level reporting, and a persistent kill switch are separate follow-up milestones.
+
+
+## Reproducible market scan snapshots
+
+`MarketReplayStore` records the complete order books supplied to one scanner pass, the explicit fee assumptions, target base quantity, scanner thresholds, and the exact UTC clock used for freshness checks. It writes canonical JSON and a SHA-256 checksum to SQLite; `replay_scan(run_id)` reconstructs the typed order books and reruns the scanner with the saved clock/configuration.
+
+```python
+from arb_foundry.exchanges import default_adapters
+from arb_foundry.market_replay import MarketReplayStore
+from arb_foundry.scanner import SpotArbitrageScanner
+
+adapters = {adapter.exchange: adapter for adapter in default_adapters()}
+books = [
+    adapters["binance"].get_order_book("BTC/USDT", limit=20),
+    adapters["okx"].get_order_book("BTC/USDT", limit=20),
+]
+scanner = SpotArbitrageScanner(max_data_age_seconds=5, min_net_spread_bps="5")
+with MarketReplayStore("data/market-replay.sqlite3") as store:
+    run_id = store.record_scan(
+        books,
+        fee_rates={"binance": "0.001", "okx": "0.001"},
+        target_quantity="0.01",
+        scanner=scanner,
+    )
+    reproduced_report = store.replay_scan(run_id)
+    print(run_id, reproduced_report.opportunities, reproduced_report.rejections)
+```
+
+Replay uses the **original scan clock**, not the current time, so a previously fresh book does not become stale merely because replay occurs later. Replay is deterministic for the persisted scanner inputs/configuration and code version; it is not a promise that a live opportunity would have filled. The store does not persist exchange credentials, query exchanges, or submit orders. SHA-256 detects accidental corruption but is not tamper-proof against someone who can modify the SQLite database and recompute the digest. Preserve the database and code revision together for auditability. Schema/version errors and checksum mismatches fail closed.
