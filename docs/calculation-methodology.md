@@ -133,5 +133,30 @@ Both legs are then priced for that same paired quantity. The remainder is report
 - Scanner spread is an estimate from a snapshot, not realized return.
 - Fees are assumptions unless verified for the relevant account, market, and fee tier.
 - The paper simulator is deterministic and does not send orders or maintain exchange balances.
-- Market constraints are a validation utility and are not yet automatically sourced from exchange metadata or wired into the scanner.
+- Market constraints can be supplied to the paper simulator for pre-trade validation, but are not automatically sourced from exchange metadata and are not yet wired into the scanner.
 - A future production-quality evaluation should add timestamp-skew checks between venues, explicit inventory and transfer costs, durable trade/event records, latency and fill-probability models, and risk limits.
+
+
+## 9. Paper pre-trade gates: freshness, cross-venue skew, and constraints
+
+Before estimating fills, the paper simulator validates each book against \`max_data_age_seconds\`. With current time \(t\) and book timestamp \(t_i\), the age gate requires:
+
+\[
+0 \le t-t_i \le A_{max}
+\]
+
+The shared freshness utility allows a timestamp up to five seconds in the future to tolerate small clock skew; timestamps farther in the future are rejected. The simulator also compares venue snapshot times directly:
+
+\[
+\mathrm{SnapshotSkew}=|t_{buy}-t_{sell}|
+\]
+
+and rejects the pair when \`SnapshotSkew > max_snapshot_skew_seconds\`. Defaults for both age and cross-venue skew are five seconds. These are configurable safeguards, not evidence that exchange clocks or network latency are synchronized.
+
+If both \`buy_constraints\` and \`sell_constraints\` are supplied, each must match its book's exchange and normalized symbol. The simulator rounds the estimated buy VWAP upward and sell VWAP downward to each venue's price tick, then validates the simulated paired quantity against tick/step, min/max quantity, and minimum quote notional rules. A constraint failure raises \`DataValidationError\`; the caller should record the rejection separately if it needs a complete rejected-attempt log. Supplying only one venue's constraints is an error. The simulator does not fetch exchange metadata; callers must source rules from current, trusted metadata.
+
+## 10. SQLite paper-trade audit events
+
+\`PaperTradeStore\` appends one event per recorded simulation result. Each row records UTC event time, symbol, status, buy/sell venue identifiers, both input snapshot timestamps, and a JSON payload containing quantities, VWAPs, notionals, fees, gross/net PnL, slippage estimate, and any simulator rejection reason. Decimal values are serialized as strings to avoid losing decimal precision in the audit representation.
+
+The store exposes \`record\`, \`get\`, and \`list_events\`; it does not expose an update/delete method. This is an append-only application interface, not a tamper-proof database: a process with direct SQLite write access can still alter the file. Backups, retention, access control, integrity checks, portfolio balances, position accounting, and durable logging of validation exceptions remain future work.

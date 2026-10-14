@@ -7,11 +7,15 @@ performed. The result is a simplified execution estimate, not a fill guarantee.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
 from arb_foundry.errors import DataValidationError
-from arb_foundry.models import MarketType, OrderBook
+from arb_foundry.market_constraints import SymbolConstraints
+from arb_foundry.market_data import validate_freshness
+from arb_foundry.models import MarketType, OrderBook, TradeSide
+from arb_foundry.time_utils import ensure_utc, utc_now
 
 _BPS = Decimal("10000")
 _ZERO = Decimal("0")
@@ -73,7 +77,20 @@ def _vwap(levels, quantity: Decimal) -> Decimal:
 
 
 class PaperTradingSimulator:
-    """Simulate both legs using visible depth, fee assumptions, and slippage."""
+    """Simulate paired spot fills after freshness and optional venue-filter checks."""
+
+    def __init__(
+        self,
+        *,
+        max_data_age_seconds: int = 5,
+        max_snapshot_skew_seconds: int = 5,
+    ) -> None:
+        if max_data_age_seconds <= 0:
+            raise DataValidationError("max_data_age_seconds must be greater than zero")
+        if max_snapshot_skew_seconds < 0:
+            raise DataValidationError("max_snapshot_skew_seconds must not be negative")
+        self.max_data_age_seconds = max_data_age_seconds
+        self.max_snapshot_skew_seconds = max_snapshot_skew_seconds
 
     def simulate(
         self,
@@ -84,6 +101,9 @@ class PaperTradingSimulator:
         fee_rates: dict[str, Decimal | int | float | str],
         slippage_bps: Decimal | int | float | str = Decimal("0"),
         allow_partial_fills: bool = False,
+        buy_constraints: SymbolConstraints | None = None,
+        sell_constraints: SymbolConstraints | None = None,
+        now: datetime | None = None,
     ) -> PaperTradeResult:
         requested = _decimal("quantity", quantity)
         if requested <= 0:
@@ -98,6 +118,26 @@ class PaperTradingSimulator:
             raise DataValidationError("paper spot simulation requires spot order books")
         if buy_book.symbol != sell_book.symbol:
             raise DataValidationError("buy and sell books must have the same symbol")
+        current = ensure_utc(now) if now is not None else utc_now()
+        validate_freshness(buy_book.timestamp, self.max_data_age_seconds, now=current)
+        validate_freshness(sell_book.timestamp, self.max_data_age_seconds, now=current)
+        snapshot_skew = abs((buy_book.timestamp - sell_book.timestamp).total_seconds())
+        if snapshot_skew > self.max_snapshot_skew_seconds:
+            raise DataValidationError(
+                f"order-book timestamp skew is {snapshot_skew:.3f}s; maximum is "
+                f"{self.max_snapshot_skew_seconds}s"
+            )
+        if (buy_constraints is None) != (sell_constraints is None):
+            raise DataValidationError("buy and sell constraints must be supplied together")
+        if buy_constraints is not None and sell_constraints is not None:
+            for label, rules, book in (
+                ("buy", buy_constraints, buy_book),
+                ("sell", sell_constraints, sell_book),
+            ):
+                if rules.exchange != book.exchange or rules.symbol != book.symbol:
+                    raise DataValidationError(
+                        f"{label} constraints must match the order-book exchange and symbol"
+                    )
         if buy_book.exchange == sell_book.exchange:
             raise DataValidationError("buy and sell exchanges must differ")
 
@@ -129,6 +169,11 @@ class PaperTradingSimulator:
 
         raw_buy_vwap = _vwap(buy_book.asks, fill_quantity)
         raw_sell_vwap = _vwap(sell_book.bids, fill_quantity)
+        if buy_constraints is not None and sell_constraints is not None:
+            buy_limit = buy_constraints.round_price(raw_buy_vwap, TradeSide.BUY)
+            sell_limit = sell_constraints.round_price(raw_sell_vwap, TradeSide.SELL)
+            buy_constraints.validate_order(price=buy_limit, quantity=fill_quantity)
+            sell_constraints.validate_order(price=sell_limit, quantity=fill_quantity)
         slip_rate = slippage / _BPS
         executed_buy_vwap = raw_buy_vwap * (Decimal("1") + slip_rate)
         executed_sell_vwap = raw_sell_vwap * (Decimal("1") - slip_rate)

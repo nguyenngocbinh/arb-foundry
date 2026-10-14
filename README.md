@@ -135,7 +135,26 @@ result = PaperTradingSimulator().simulate(
 print(result.status, result.filled_quantity, result.net_pnl)
 ```
 
-The simulator applies adverse slippage to both legs, computes fees on adjusted quote notionals, and rejects incomplete paired liquidity by default. The optional partial-fill mode simulates only the common filled quantity; it does not model the risk of an unhedged residual or any balance/inventory constraints. See [calculation methodology](docs/calculation-methodology.md) for formulas and worked examples.
+The simulator validates each book's freshness and the cross-venue timestamp skew before estimating fills. You can also pass both venues' `SymbolConstraints` to enforce price tick, quantity step, min/max quantity, and min-notional rules before a simulated fill. It applies adverse slippage and fees to adjusted quote notionals, and rejects incomplete paired liquidity by default. Optional partial-fill mode models only the common filled quantity; it does not model the risk of an unhedged residual or balance/inventory constraints. See [calculation methodology](docs/calculation-methodology.md) for formulas and assumptions.
+
+## Paper-trade audit store
+
+`PaperTradeStore` uses SQLite to append simulation results and the timestamps of both source snapshots. It stores no credentials and never submits orders.
+
+```python
+from arb_foundry.paper_store import PaperTradeStore
+
+with PaperTradeStore("data/paper-trades.sqlite3") as store:
+    event_id = store.record(
+        result,
+        buy_snapshot_at=buy_book.timestamp,
+        sell_snapshot_at=sell_book.timestamp,
+    )
+    print(store.get(event_id))
+    print(store.list_events(limit=100))
+```
+
+The store provides append/query operations; it does not yet implement portfolio balances, position accounting, retention policies, or a tamper-evident external audit sink.
 
 The public adapter methods make real HTTP requests. Unit tests use deterministic fixtures and do not call exchanges. The periodic health runner must be started by the host application's lifecycle to remain active; no background service is automatically launched by importing this package.
 
