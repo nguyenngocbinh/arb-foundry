@@ -1,6 +1,4 @@
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-
 import pytest
 
 from arb_foundry.errors import DataValidationError
@@ -44,14 +42,12 @@ def test_market_replay_survives_reopen_and_reproduces_scan(tmp_path):
     with MarketReplayStore(database) as store:
         actual = store.replay_scan(run_id)
         assert actual == expected
-        assert store.list_runs(limit=10) == [
-            {
-                "run_id": 1,
-                "recorded_at": NOW.isoformat(),
-                "schema_version": 1,
-                "sha256": store.list_runs(limit=1)[0]["sha256"],
-            }
-        ]
+        runs = store.list_runs(limit=10)
+        assert len(runs) == 1
+        assert runs[0]["run_id"] == 1
+        assert runs[0]["recorded_at"] == NOW.isoformat()
+        assert runs[0]["schema_version"] == 1
+        assert len(runs[0]["sha256"]) == 64
 
 
 def test_replay_keeps_original_clock_for_stale_book_diagnostics(tmp_path):
@@ -73,8 +69,11 @@ def test_replay_keeps_original_clock_for_stale_book_diagnostics(tmp_path):
 def test_replay_fails_closed_when_snapshot_checksum_is_corrupted(tmp_path):
     with MarketReplayStore(tmp_path / "market.sqlite3") as store:
         run_id = store.record_scan(
-            books(), fee_rates=FEES, target_quantity="1",
-            scanner=SpotArbitrageScanner(), now=NOW,
+            books(),
+            fee_rates=FEES,
+            target_quantity="1",
+            scanner=SpotArbitrageScanner(),
+            now=NOW,
         )
         store._connection.execute(
             "UPDATE market_scan_runs SET payload_json = ? WHERE run_id = ?",
@@ -89,8 +88,11 @@ def test_record_scan_rejects_duplicate_normalized_fee_keys(tmp_path):
     with MarketReplayStore(tmp_path / "market.sqlite3") as store:
         with pytest.raises(DataValidationError, match="duplicate normalized"):
             store.record_scan(
-                books(), fee_rates={"BINANCE": "0.001", "binance": "0.002", "okx": "0.001"},
-                target_quantity="1", scanner=SpotArbitrageScanner(), now=NOW,
+                books(),
+                fee_rates={"BINANCE": "0.001", "binance": "0.002", "okx": "0.001"},
+                target_quantity="1",
+                scanner=SpotArbitrageScanner(),
+                now=NOW,
             )
         assert store.list_runs() == []
 
