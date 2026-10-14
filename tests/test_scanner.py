@@ -188,3 +188,15 @@ def test_scanner_returns_candidates_in_descending_net_spread_order() -> None:
     assert len(report.opportunities) >= 2
     spreads = [item.net_spread_bps for item in report.opportunities]
     assert spreads == sorted(spreads, reverse=True)
+
+def test_scanner_rejects_zero_profit_at_zero_threshold() -> None:
+    buy = book("binance", [("100", "5")], [("100", "5")])
+    sell = book("okx", [("100", "5")], [("100", "5")])
+    zero_fees = {"binance": "0", "okx": "0"}
+
+    report = SpotArbitrageScanner().scan(
+        [buy, sell], fee_rates=zero_fees, target_quantity="1", now=NOW
+    )
+
+    assert report.opportunities == ()
+    assert any("at or below threshold" in item.reason for item in report.rejections)
