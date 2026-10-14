@@ -6,7 +6,7 @@ normalized to UTC. Naive datetimes are rejected rather than guessed.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from arb_foundry.errors import DataValidationError
 
@@ -15,12 +15,12 @@ def ensure_utc(value: datetime) -> datetime:
     """Return an aware datetime normalized to UTC; reject naive values."""
     if value.tzinfo is None or value.utcoffset() is None:
         raise DataValidationError("timestamp must be timezone-aware")
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
 
 
 def utc_now() -> datetime:
     """Return the current timezone-aware UTC time."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_timestamp(value: str) -> datetime:

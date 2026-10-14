@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -14,7 +14,7 @@ from arb_foundry.models import (
     TradeSide,
 )
 
-NOW = datetime(2026, 10, 14, 10, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 14, 10, tzinfo=UTC)
 
 
 def test_ticker_normalizes_identity_and_timestamp() -> None:

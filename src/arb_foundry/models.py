@@ -98,9 +98,9 @@ class OrderBook:
             raise DataValidationError("order book must contain at least one bid and one ask")
         if any(not isinstance(level, OrderBookLevel) for level in (*self.bids, *self.asks)):
             raise DataValidationError("order book levels must be OrderBookLevel instances")
-        if any(a.price < b.price for a, b in zip(self.bids, self.bids[1:])):
+        if any(a.price < b.price for a, b in zip(self.bids, self.bids[1:], strict=False)):
             raise DataValidationError("order book bids must be sorted by descending price")
-        if any(a.price > b.price for a, b in zip(self.asks, self.asks[1:])):
+        if any(a.price > b.price for a, b in zip(self.asks, self.asks[1:], strict=False)):
             raise DataValidationError("order book asks must be sorted by ascending price")
         if self.bids[0].price >= self.asks[0].price:
             raise DataValidationError("order book best bid must be below best ask")
@@ -146,8 +146,12 @@ class Opportunity:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", _identity("symbol", self.symbol).upper())
-        object.__setattr__(self, "buy_exchange", _identity("buy_exchange", self.buy_exchange).lower())
-        object.__setattr__(self, "sell_exchange", _identity("sell_exchange", self.sell_exchange).lower())
+        object.__setattr__(
+            self, "buy_exchange", _identity("buy_exchange", self.buy_exchange).lower()
+        )
+        object.__setattr__(
+            self, "sell_exchange", _identity("sell_exchange", self.sell_exchange).lower()
+        )
         if self.buy_exchange == self.sell_exchange:
             raise DataValidationError("buy_exchange and sell_exchange must differ")
         for name in ("buy_price", "sell_price", "quantity"):
