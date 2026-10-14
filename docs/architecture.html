@@ -25,26 +25,28 @@
   <p class="eyebrow">Research · Risk-first · Paper trading</p>
   <h1>Arb Foundry</h1>
   <p>A modular foundation for researching cross-exchange crypto arbitrage without placing real orders.</p>
-  <p class="notice"><strong>Safety boundary:</strong> live order submission is not implemented. Public spot market-data adapters and a configurable health-check runner are implemented, but the host runtime must start the runner. This page distinguishes working components from planned components.</p>
+  <p class="notice"><strong>Safety boundary:</strong> live order submission is not implemented. Public spot market-data adapters and a configurable health-check runner are implemented. The depth-aware scanner produces research candidates only; it never submits orders.</p>
   <h2>Data flow</h2>
   <section class="pipeline" aria-label="Architecture pipeline">
     <div class="stage"><strong>1. Public exchange adapters — implemented</strong><span>Binance · OKX · Bybit · KuCoin; read-only ticker, order book and public API health endpoints</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>2. Market-data normalization — implemented</strong><span>Canonical BASE/QUOTE symbols, Decimal prices and quantities, UTC timestamps, stale-data validation</span></div>
+    <div class="stage"><strong>2. Market-data normalization — implemented</strong><span>Canonical symbols, Decimal prices and quantities, UTC timestamps, stale-data validation</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>3. Opportunity scanner — planned</strong><span>Gross/net spread after fees, executable-size VWAP and insufficient-depth rejection</span></div>
+    <div class="stage"><strong>3. Spot opportunity scanner — implemented</strong><span>Cross-exchange spot comparisons, exact target quantity, depth-weighted VWAP, configured buy/sell fees, net spread threshold, and rejection diagnostics</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
     <div class="grid">
-      <div class="stage"><strong>Classic spot–spot — planned</strong><span>Compare buy and sell venues while accounting for transfer and inventory constraints.</span></div>
-      <div class="stage"><strong>Spot–perpetual — planned</strong><span>Research funding, basis, margin and liquidation risks; no live execution.</span></div>
+      <div class="stage"><strong>Classic spot–spot — research scanner implemented</strong><span>Reports candidates from visible snapshots. Inventory, transfer constraints, latency and execution probability are not modelled yet.</span></div>
+      <div class="stage"><strong>Spot–perpetual — planned</strong><span>Separate research strategy for funding, basis, margin and liquidation risks; no live execution.</span></div>
     </div>
     <div class="arrow" aria-hidden="true">↓</div>
     <div class="stage"><strong>4. Risk engine + paper simulator — planned</strong><span>Simulated fills, fees, slippage, latency, positions, PnL, limits and kill conditions</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
     <div class="stage"><strong>5. Persistence, reporting and operations — planned</strong><span>Persistent health history, reproducible evaluations, error notifications and failure analysis</span></div>
   </section>
+  <h2>Scanner assumptions</h2>
+  <p>Fee rates are explicit decimal fractions of quote notional (0.001 = 0.1%) and are illustrative unless verified independently. The scanner assumes fees on quote notional for both legs, requires the full target base quantity to be visible on both sides, and rejects stale books. It does not yet model transfer/withdrawal costs, inventory availability, latency, partial execution, rebates, funding or price movement after the snapshot. An opportunity is not a promise of profit.</p>
   <h2>Implemented health checks</h2>
-  <p>The health-check service checks public exchange endpoints at startup and repeats at a configurable interval (24 hours by default). It records health, check time, latency and a safe error summary in memory. The application host must start the runner in a managed worker; no service starts automatically at import time.</p>
+  <p>The health-check service checks public exchange endpoints at startup and repeats at a configurable interval (24 hours by default). It records health, check time, latency and an error summary in memory. The application host must start the runner in a managed worker; no service starts automatically at import time.</p>
   <h2>Implementation phases</h2>
   <ol>
     <li>Project foundation, tests, lint and CI.</li>
@@ -61,7 +63,7 @@
     <li>Every milestone requires automated tests and traceable evidence.</li>
     <li>Changes stay on feature branches; merging into <code>main</code> requires explicit approval.</li>
   </ul>
-  <footer>Roadmap: <a href="https://github.com/nguyenngocbinh/arb-foundry/issues/1">GitHub Issue #1</a>. This document is explicit about planned versus implemented capabilities.</footer>
+  <footer>Roadmap: <a href="https://github.com/nguyenngocbinh/arb-foundry/issues/1">GitHub Issue #1</a>. This document distinguishes implemented capabilities from planned work.</footer>
 </main>
 </body>
 </html>

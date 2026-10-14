@@ -13,7 +13,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; and a health-check runner that records the latest per-exchange status in memory. The opportunity scanner, persistent health history, paper-trading simulator, and live runtime/service wiring are not implemented yet. This is not a trading bot.
+Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; and a depth-aware spot scanner that estimates executable-size VWAP and subtracts configured buy/sell fees. The scanner reports rejected inputs/candidates and does not place orders. Paper-trading simulation, persistent health history, and live runtime/service wiring are not implemented. This is not a trading bot.
 
 See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1) and [HTML architecture page](docs/architecture.html).
 
@@ -61,6 +61,37 @@ health = HealthCheckService(adapters, interval_hours=24)
 health.check_all()  # latest status is available from health.latest
 ```
 
+## Spot scanner quick start
+
+The scanner accepts order-book snapshots and an explicit fee rate per exchange. Fee rates are decimal fractions of quote notional: `0.001` means `0.1%`. The target quantity is in base-asset units, e.g. `0.01` BTC. It only reports candidates that can fill the entire target quantity on both legs, pass freshness checks, and meet the configured net-spread threshold.
+
+```python
+from decimal import Decimal
+
+from arb_foundry.exchanges import default_adapters
+from arb_foundry.scanner import SpotArbitrageScanner
+
+adapters = default_adapters()
+books = [adapter.get_order_book("BTC/USDT", limit=20) for adapter in adapters]
+scanner = SpotArbitrageScanner(max_data_age_seconds=5, min_net_spread_bps=Decimal("5"))
+report = scanner.scan(
+    books,
+    fee_rates={
+        "binance": Decimal("0.001"),
+        "okx": Decimal("0.001"),
+        "bybit": Decimal("0.001"),
+        "kucoin": Decimal("0.001"),
+    },
+    target_quantity=Decimal("0.01"),
+)
+for item in report.opportunities:
+    print(item.buy_exchange, "->", item.sell_exchange, item.net_spread_bps, "bps")
+for rejection in report.rejections:
+    print("REJECTED:", rejection.reason)
+```
+
+The example uses illustrative fee rates, not verified account-specific fee tiers. Configure actual public fee assumptions for research before interpreting results. The scanner's net calculation assumes fees are charged on quote notional for both legs. It does not account for withdrawal/transfer costs, inventory imbalance, latency, slippage beyond the visible book snapshot, rebates, funding, or execution probability. A reported opportunity is not a guarantee of profit.
+
 The public adapter methods make real HTTP requests. Unit tests use deterministic fixtures and do not call exchanges. The periodic health runner must be started by the host application's lifecycle to remain active; no background service is automatically launched by importing this package.
 
 Some public endpoints do not include a source timestamp in their ticker response. In those cases, the adapter timestamps the response at receipt time; freshness checks therefore measure the age of the local snapshot, not exchange-side event latency.
@@ -69,7 +100,8 @@ Some public endpoints do not include a source timestamp in their ticker response
 
 - Paper trading only by default.
 - No live order submission, exchange credentials, or authenticated endpoints.
-- Future scanner must reject stale data and insufficient order-book depth.
+- Scanner rejects stale data and insufficient order-book depth for the configured target size.
+- Fee rates are explicit assumptions and must not be represented as exchange-verified unless verified separately.
 - Each milestone needs tests and evidence before its roadmap item is marked complete.
 - Work on feature branches; never merge into `main` without explicit approval.
 
