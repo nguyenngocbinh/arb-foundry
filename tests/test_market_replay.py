@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from arb_foundry.errors import DataValidationError
