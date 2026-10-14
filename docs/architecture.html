@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Arb Foundry architecture and implementation roadmap">
+  <title>Arb Foundry — Architecture</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2c; --line:#29354d; --text:#e7edf8; --muted:#a5b2c8; --accent:#f59e0b; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,sans-serif; }
+    main { max-width:960px; margin:0 auto; padding:40px 22px 72px; }
+    h1,h2 { line-height:1.2; } h1 { font-size:clamp(2rem,5vw,3.4rem); margin-bottom:8px; } h2 { font-size:1.25rem; }
+    p,li { color:var(--muted); } .eyebrow { color:var(--accent); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.8rem; }
+    .notice { border:1px solid #854d0e; background:#2b1c0b; padding:14px 16px; border-radius:12px; }
+    .pipeline { display:grid; gap:12px; margin:26px 0; } .stage { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; }
+    .stage strong { display:block; color:var(--text); } .stage span { color:var(--muted); font-size:.94rem; }
+    .arrow { text-align:center; color:var(--accent); font-size:1.3rem; line-height:1; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+    a { color:#fbbf24; } footer { margin-top:36px; border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:.9rem; }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Research · Risk-first · Paper trading</p>
+  <h1>Arb Foundry</h1>
+  <p>A modular foundation for researching cross-exchange crypto arbitrage without placing real orders.</p>
+  <p class="notice"><strong>Safety boundary:</strong> live order submission is not implemented. This page describes the target architecture, not a claim that all components are already available.</p>
+  <h2>Target data flow</h2>
+  <section class="pipeline" aria-label="Target architecture pipeline">
+    <div class="stage"><strong>1. Exchange adapters</strong><span>Binance · OKX · Bybit · KuCoin — public market data first</span></div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="stage"><strong>2. Market data normalization</strong><span>Ticker, order book, symbol mapping, UTC timestamps, freshness and depth validation</span></div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="stage"><strong>3. Opportunity scanner</strong><span>Gross/net spread after fees, executable-size VWAP and stale-data rejection</span></div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="grid">
+      <div class="stage"><strong>Classic spot–spot</strong><span>Compare buy and sell venues while accounting for transfer and inventory constraints.</span></div>
+      <div class="stage"><strong>Spot–perpetual</strong><span>Research funding, basis, margin and liquidation risks; no live execution.</span></div>
+    </div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="stage"><strong>4. Risk engine + paper simulator</strong><span>Simulated fills, fees, slippage, latency, positions, PnL, limits and kill conditions</span></div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="stage"><strong>5. Persistence, reporting and monitoring</strong><span>Reproducible evaluations, 24-hour API health checks, logs and failure analysis</span></div>
+  </section>
+  <h2>Implementation phases</h2>
+  <ol>
+    <li>Project foundation, tests, lint and CI.</li>
+    <li>Public market-data adapters and 24-hour API health checks.</li>
+    <li>Depth-aware spot arbitrage scanner and net-spread calculation.</li>
+    <li>Separate strategy modules for spot–spot and spot–perpetual research.</li>
+    <li>Paper trading, risk limits, persistence and recovery tests.</li>
+    <li>Evaluation reports, operational guidance and documentation.</li>
+  </ol>
+  <h2>Engineering rules</h2>
+  <ul>
+    <li>Paper trading only by default; no secrets in Git.</li>
+    <li>Reject stale data and insufficient order-book depth.</li>
+    <li>Every milestone requires automated tests and traceable evidence.</li>
+    <li>Changes stay on feature branches; merging into <code>main</code> requires explicit approval.</li>
+  </ul>
+  <footer>Roadmap: <a href="https://github.com/nguyenngocbinh/arb-foundry/issues/1">GitHub Issue #1</a>. This document is explicit about planned versus implemented capabilities.</footer>
+</main>
+</body>
+</html>
