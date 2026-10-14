@@ -73,7 +73,7 @@ def test_scanner_rejects_stale_book() -> None:
     )
 
     assert report.opportunities == ()
-    assert any("stale" in item.reason for item in report.rejections)
+    assert any("unusable market data" in item.reason for item in report.rejections)
 
 
 def test_scanner_rejects_net_spread_below_threshold_after_fees() -> None:
