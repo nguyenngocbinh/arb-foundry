@@ -104,3 +104,13 @@ by this module. Event IDs are not deduplicated by the report. Strategy labels
 and audit files remain inside the same SQLite trust boundary; file access and
 backups must be controlled. This is an application-level audit interface, not a
 tamper-proof ledger.
+
+### Avoiding misleading venue attribution
+
+Grouping by `buy_exchange` or `sell_exchange` assigns the **whole paired
+trade's** PnL to a group selected by that leg's venue; it does not allocate
+profit between the two venues. These groupings answer questions such as
+"what results did routes buying on Binance produce?" They are not per-venue
+accounting and must not be summed across different grouping choices. Use
+`exchange_pair` for route-level comparison. The report does not invent a
+per-venue PnL allocation rule.
