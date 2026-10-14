@@ -63,8 +63,10 @@ def test_periodic_runner_checks_immediately_and_stops_cleanly(monkeypatch) -> No
     service = HealthCheckService([adapter], interval_hours=24)
     stop = Event()
 
+    original_check = service.check_all
+
     def check_and_stop():
-        results = service.check_all()
+        results = original_check()
         stop.set()
         return results
 
