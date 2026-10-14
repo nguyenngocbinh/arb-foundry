@@ -160,3 +160,27 @@ If both \`buy_constraints\` and \`sell_constraints\` are supplied, each must mat
 \`PaperTradeStore\` appends one event per recorded simulation result. Each row records UTC event time, symbol, status, buy/sell venue identifiers, both input snapshot timestamps, and a JSON payload containing quantities, VWAPs, notionals, fees, gross/net PnL, slippage estimate, and any simulator rejection reason. Decimal values are serialized as strings to avoid losing decimal precision in the audit representation.
 
 The store exposes \`record\`, \`get\`, and \`list_events\`; it does not expose an update/delete method. This is an append-only application interface, not a tamper-proof database: a process with direct SQLite write access can still alter the file. Backups, retention, access control, integrity checks, portfolio balances, position accounting, and durable logging of validation exceptions remain future work.
+
+
+## 11. Paper portfolio accounting and risk limits
+
+The in-memory portfolio ledger maintains non-negative balances keyed by exchange and asset. For a paired spot result on BASE/QUOTE:
+
+- Buy venue: debit buy notional plus buy fee from QUOTE and credit the paired filled quantity to BASE.
+- Sell venue: debit the paired filled quantity from BASE and credit sell notional minus sell fee to QUOTE.
+- Realized PnL is accumulated from the simulator's net PnL; daily realized PnL is grouped by UTC date.
+- A trade is applied atomically only after both legs pass inventory checks. The ledger does not move funds between venues or assume inventory can be borrowed.
+
+Mark-to-market equity is the sum of each non-zero asset balance multiplied by its supplied price in the configured quote asset; the quote asset is valued at 1. Exposure by exchange is the sum of marked balances held on that exchange. Drawdown is:
+
+\[
+\mathrm{Drawdown}_{pct}=\frac{\mathrm{PeakEquity}-\mathrm{CurrentEquity}}{\mathrm{PeakEquity}}\times100
+\]
+
+RiskEngine returns an explicit decision and metrics. Configurable limits include maximum trade notional, maximum marked exposure per exchange, maximum drawdown percentage and maximum daily realized loss. It also rejects simulator rejections and insufficient inventory. A risk decision does not mutate balances; only PortfolioLedger.apply_trade does.
+
+The ledger is currently in-memory, so restart recovery is not provided. Mark prices must be supplied by the caller and are assumptions unless their provenance and timestamps are independently recorded. The current accounting supports one quote asset per portfolio (USDT by default), does not model transfers, borrowed inventory, funding, taxes or external cash flows, and is not a substitute for exchange account reconciliation.
+
+## 12. Rejected pre-trade audit events
+
+PaperTradeStore can append a separate rejection event when a freshness/validation exception or risk check rejects an attempt before a PaperTradeResult exists. Each event stores UTC record time, normalized symbol and venue names, both source snapshot timestamps, a reason and JSON context. Context values that are not directly JSON serializable are stringified. These records improve reproducibility but remain in the same SQLite trust boundary and are not tamper-proof.
