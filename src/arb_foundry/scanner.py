@@ -214,10 +214,10 @@ class SpotArbitrageScanner:
                     gross_bps = (gross_profit / buy_notional) * _BPS
                     net_bps = (net_profit / buy_notional) * _BPS
 
-                    if net_bps < self.min_net_spread_bps:
+                    if net_bps <= self.min_net_spread_bps:
                         rejections.append(
                             ScanRejection(
-                                f"net spread {net_bps:.4f} bps below threshold "
+                                f"net spread {net_bps:.4f} bps at or below threshold "
                                 f"{self.min_net_spread_bps} bps",
                                 symbol,
                                 buy_exchange,
