@@ -92,7 +92,10 @@ class PaperTradingSimulator:
         slippage = _decimal("slippage_bps", slippage_bps)
         if slippage < 0 or slippage >= _BPS:
             raise DataValidationError("slippage_bps must be in [0, 10000)")
-        if buy_book.market_type is not MarketType.SPOT or sell_book.market_type is not MarketType.SPOT:
+        if (
+            buy_book.market_type is not MarketType.SPOT
+            or sell_book.market_type is not MarketType.SPOT
+        ):
             raise DataValidationError("paper spot simulation requires spot order books")
         if buy_book.symbol != sell_book.symbol:
             raise DataValidationError("buy and sell books must have the same symbol")
