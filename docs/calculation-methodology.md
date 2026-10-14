@@ -208,3 +208,24 @@ If accounting validation or the SQLite write fails, the original in-memory ledge
 The ledger is not automatically persisted by calling `PortfolioLedger.apply_trade()`. For durable operation, use `apply_trade_and_save` consistently. If `valuation()` raises the peak-equity watermark and that watermark must survive a restart, explicitly call `save(ledger)` after valuation.
 
 The checksum detects accidental payload corruption but is not tamper-proof: someone able to rewrite the SQLite file can recompute it. Use file-system access controls and backups. Snapshot persistence does not yet persist order-book inputs, risk-limit configuration, kill-switch state, or enough information to replay a strategy decision exactly.
+
+
+## 14. Market snapshots and deterministic scanner replay
+
+`MarketReplayStore` persists the full ordered bid/ask levels for each input `OrderBook`, including normalized exchange/symbol, market type, UTC source timestamp, and exact Decimal price/quantity strings. The run payload also records:
+
+- The scan's fixed UTC `now` value used by freshness checks.
+- Scanner configuration: maximum data age and minimum net spread in basis points.
+- Explicit exchange fee fractions and target base-asset quantity.
+- Schema version and a SHA-256 checksum over canonical JSON.
+
+`record_scan` first runs the scanner against the proposed inputs and writes no row if input/config validation fails. `replay_scan(run_id)` verifies the checksum and schema, rebuilds typed order books, then calls the same scanner with the saved fee assumptions, threshold, target quantity and original clock. Keeping the clock fixed is essential: replaying against the wall clock would change stale-data rejections and would not reproduce the original scan.
+
+### Interpretation and failure behavior
+
+- Replay reproduces the scanner's decision from stored inputs and configuration; it does not prove that an opportunity was executable or profitable in a changing market.
+- Preserve the source-code revision and database together. If scanner implementation changes between versions, replay may produce a different result; the current schema records inputs/configuration but does not yet pin a package Git SHA.
+- Checksum mismatch, unsupported schema, malformed payload, or unknown run ID raises a validation error. The store does not silently skip to another run.
+- SHA-256 detects accidental corruption only. It is not a signature or tamper-proof audit trail; an actor with database write access can rewrite the payload and digest.
+- The store is append-only through its public API, but SQLite can still be edited directly. Restrict file access and retain backups.
+- The store includes no private credentials, authenticated endpoints, or live order execution. It does not persist risk-engine configuration, portfolio state, simulator fills, or kill-switch state in the same run record; those remain separate records/milestones.
