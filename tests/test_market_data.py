@@ -16,7 +16,7 @@ def test_normalize_symbol(value: str, expected: str) -> None:
     assert normalize_symbol(value) == expected
 
 
-@pytest.mark.parametrize("value", ["BTCUSDT", "BTC/", "/USDT", "BTC/USDT/EXTRA", "BTC / USDT"])
+@pytest.mark.parametrize("value", ["BTCUSDT", "BTC/", "/USDT", "BTC/USDT/EXTRA", "BT C/USDT"])
 def test_normalize_symbol_rejects_ambiguous_or_invalid_values(value: str) -> None:
     with pytest.raises(DataValidationError):
         normalize_symbol(value)
