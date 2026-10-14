@@ -15,3 +15,11 @@ class DataValidationError(ArbFoundryError, ValueError):
 
 class StaleMarketDataError(ArbFoundryError):
     """Raised when a consumer attempts to use data that is too old."""
+
+
+class ExchangeAPIError(ArbFoundryError):
+    """Raised when a public exchange API request fails or returns invalid data."""
+
+
+class RateLimitError(ExchangeAPIError):
+    """Raised when an exchange throttles a public API request."""
