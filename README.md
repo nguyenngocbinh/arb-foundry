@@ -224,9 +224,15 @@ Snapshots are append-only at the application API. A SHA-256 checksum detects acc
 `MarketReplayStore` records the complete order books supplied to one scanner pass, the explicit fee assumptions, target base quantity, scanner thresholds, and the exact UTC clock used for freshness checks. It writes canonical JSON and a SHA-256 checksum to SQLite; `replay_scan(run_id)` reconstructs the typed order books and reruns the scanner with the saved clock/configuration.
 
 ```python
+from arb_foundry.exchanges import default_adapters
 from arb_foundry.market_replay import MarketReplayStore
 from arb_foundry.scanner import SpotArbitrageScanner
 
+adapters = {adapter.exchange: adapter for adapter in default_adapters()}
+books = [
+    adapters["binance"].get_order_book("BTC/USDT", limit=20),
+    adapters["okx"].get_order_book("BTC/USDT", limit=20),
+]
 scanner = SpotArbitrageScanner(max_data_age_seconds=5, min_net_spread_bps="5")
 with MarketReplayStore("data/market-replay.sqlite3") as store:
     run_id = store.record_scan(
