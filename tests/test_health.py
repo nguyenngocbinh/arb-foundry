@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from datetime import UTC
+from threading import Event
 
 import pytest
 
@@ -55,3 +56,19 @@ def test_health_service_rejects_invalid_interval(interval: int) -> None:
 def test_health_service_requires_unique_exchange_names() -> None:
     with pytest.raises(ValueError, match="unique"):
         HealthCheckService([FakeAdapter("binance"), FakeAdapter("binance")])
+
+
+def test_periodic_runner_checks_immediately_and_stops_cleanly(monkeypatch) -> None:
+    adapter = FakeAdapter("binance")
+    service = HealthCheckService([adapter], interval_hours=24)
+    stop = Event()
+
+    def check_and_stop():
+        results = service.check_all()
+        stop.set()
+        return results
+
+    monkeypatch.setattr(service, "check_all", check_and_stop)
+    service.run_forever(stop)
+
+    assert adapter.calls == 1
