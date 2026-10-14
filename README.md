@@ -13,9 +13,9 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; and a depth-aware spot scanner that estimates executable-size VWAP and subtracts configured buy/sell fees. The scanner reports rejected inputs/candidates and does not place orders. Paper-trading simulation, persistent health history, and live runtime/service wiring are not implemented. This is not a trading bot.
+Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, durable trade history, latency modelling, persistent health history, and live runtime/service wiring are not implemented. This is not a trading bot.
 
-See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1) and [HTML architecture page](docs/architecture.html).
+See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations.
 
 ## Development setup
 
@@ -91,6 +91,51 @@ for rejection in report.rejections:
 ```
 
 The example uses illustrative fee rates, not verified account-specific fee tiers. Configure actual public fee assumptions for research before interpreting results. The scanner's net calculation assumes fees are charged on quote notional for both legs. It does not account for withdrawal/transfer costs, inventory imbalance, latency, slippage beyond the visible book snapshot, rebates, funding, or execution probability. A reported opportunity is not a guarantee of profit.
+
+## Market constraints quick start
+
+Rules are explicit per exchange and symbol; the library does not guess filters or fetch private account settings. Use current, trusted exchange metadata before constructing these rules.
+
+```python
+from arb_foundry.market_constraints import SymbolConstraints
+from arb_foundry.models import TradeSide
+
+rules = SymbolConstraints(
+    exchange="binance",
+    symbol="BTC/USDT",
+    price_tick="0.1",
+    quantity_step="0.00001",
+    min_quantity="0.00001",
+    min_notional="5",
+)
+quantity = rules.round_quantity_down("0.012349")
+buy_limit_price = rules.round_price("65000.01", TradeSide.BUY)
+rules.validate_order(price=buy_limit_price, quantity=quantity)
+```
+
+## Paper simulation quick start
+
+The simulator estimates a paired fill against supplied snapshots. It performs no network calls, sends no orders, and does not maintain exchange balances.
+
+```python
+from arb_foundry.exchanges import default_adapters
+from arb_foundry.paper import PaperTradingSimulator
+
+adapters = {adapter.exchange: adapter for adapter in default_adapters()}
+buy_book = adapters["binance"].get_order_book("BTC/USDT", limit=20)
+sell_book = adapters["okx"].get_order_book("BTC/USDT", limit=20)
+result = PaperTradingSimulator().simulate(
+    buy_book,
+    sell_book,
+    quantity="0.001",
+    fee_rates={"binance": "0.001", "okx": "0.001"},
+    slippage_bps="5",
+    allow_partial_fills=False,
+)
+print(result.status, result.filled_quantity, result.net_pnl)
+```
+
+The simulator applies adverse slippage to both legs, computes fees on adjusted quote notionals, and rejects incomplete paired liquidity by default. The optional partial-fill mode simulates only the common filled quantity; it does not model the risk of an unhedged residual or any balance/inventory constraints. See [calculation methodology](docs/calculation-methodology.md) for formulas and worked examples.
 
 The public adapter methods make real HTTP requests. Unit tests use deterministic fixtures and do not call exchanges. The periodic health runner must be started by the host application's lifecycle to remain active; no background service is automatically launched by importing this package.
 
