@@ -13,7 +13,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; and a depth-aware spot scanner that estimates executable-size VWAP and subtracts configured buy/sell fees. The scanner reports rejected inputs/candidates and does not place orders. Paper-trading simulation, persistent health history, and live runtime/service wiring are not implemented. This is not a trading bot.
+Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, durable trade history, latency modelling, persistent health history, and live runtime/service wiring are not implemented. This is not a trading bot.
 
 See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations.
 
