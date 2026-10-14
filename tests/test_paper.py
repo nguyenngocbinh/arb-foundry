@@ -224,3 +224,39 @@ def test_store_validates_query_limit(tmp_path) -> None:
     with PaperTradeStore(tmp_path / "paper.sqlite3") as store:
         with pytest.raises(DataValidationError, match="limit"):
             store.list_events(limit=0)
+
+
+
+def test_store_persists_pretrade_rejection_events(tmp_path) -> None:
+    database = tmp_path / "audit" / "paper.sqlite3"
+    with PaperTradeStore(database) as store:
+        event_id = store.record_rejection(
+            symbol="btc/usdt",
+            buy_exchange="Binance",
+            sell_exchange="OKX",
+            buy_snapshot_at=NOW,
+            sell_snapshot_at=NOW - timedelta(seconds=1),
+            reason="stale snapshot",
+            context={"age_seconds": 10, "limit_seconds": 5},
+            recorded_at=NOW,
+        )
+        event = store.list_rejections(limit=1)[0]
+        assert event["event_id"] == event_id
+        assert event["symbol"] == "BTC/USDT"
+        assert event["buy_exchange"] == "binance"
+        assert event["reason"] == "stale snapshot"
+        assert event["context"] == {"age_seconds": 10, "limit_seconds": 5}
+
+
+def test_store_rejection_requires_reason(tmp_path) -> None:
+    with PaperTradeStore(tmp_path / "paper.sqlite3") as store:
+        with pytest.raises(DataValidationError, match="reason"):
+            store.record_rejection(
+                symbol="BTC/USDT",
+                buy_exchange="binance",
+                sell_exchange="okx",
+                buy_snapshot_at=NOW,
+                sell_snapshot_at=NOW,
+                reason="  ",
+                recorded_at=NOW,
+            )

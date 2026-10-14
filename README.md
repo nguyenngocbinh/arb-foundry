@@ -154,7 +154,7 @@ with PaperTradeStore("data/paper-trades.sqlite3") as store:
     print(store.list_events(limit=100))
 ```
 
-The store provides append/query operations; it does not yet implement portfolio balances, position accounting, retention policies, or a tamper-evident external audit sink.
+The store provides append/query operations for simulator outcomes and separate pre-trade rejection events. It remains an append-only application interface, not a tamper-proof audit system. Portfolio accounting and risk checks are available in arb_foundry.portfolio; portfolio state is currently in-memory and must be reconstructed by the caller.
 
 The public adapter methods make real HTTP requests. Unit tests use deterministic fixtures and do not call exchanges. The periodic health runner must be started by the host application's lifecycle to remain active; no background service is automatically launched by importing this package.
 
@@ -181,3 +181,10 @@ docs/              Architecture and operating notes
 ## License
 
 No license has been selected. Until one is added, do not assume this repository grants broad reuse rights.
+
+
+## Paper portfolio and risk checks
+
+The in-memory PortfolioLedger tracks balances per exchange and asset, realized PnL, daily realized PnL, mark-to-market equity, exposure by exchange, peak equity and drawdown. A paired spot simulation requires quote-asset balance on the buy venue and base-asset inventory on the sell venue; the ledger will not invent transfers or borrow inventory.
+
+RiskEngine evaluates inventory sufficiency, maximum trade notional, optional per-exchange exposure, mark-to-market drawdown and daily realized loss. It returns a decision and metrics but never applies a trade. Call PortfolioLedger.apply_trade only after an approved decision. Supply asset marks in the portfolio quote currency (USDT by default). The ledger is in-memory in this milestone; SQLite stores audit events, not recoverable portfolio state.

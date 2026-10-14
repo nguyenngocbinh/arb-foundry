@@ -1,7 +1,7 @@
-"""Append-only SQLite audit store for paper-trading simulation results.
+"""Append-only SQLite audit store for paper-trading outcomes and rejections.
 
-This store persists simulated results and source snapshot timestamps only. It
-never interacts with an exchange or stores credentials.
+This store never interacts with an exchange or stores credentials. It is an
+append-only application interface, not a tamper-proof audit system.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Mapping
 
 from arb_foundry.errors import DataValidationError
 from arb_foundry.paper import PaperTradeResult
@@ -40,7 +41,7 @@ def _json_payload(result: PaperTradeResult) -> str:
 
 
 class PaperTradeStore:
-    """SQLite-backed append-only interface for paper-trade audit events."""
+    """SQLite-backed append/query interface for paper-trade audit events."""
 
     def __init__(self, database: str | Path) -> None:
         self.database = str(database)
@@ -69,6 +70,27 @@ class PaperTradeStore:
             ON paper_trade_events(symbol, recorded_at)
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS paper_rejection_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                recorded_at TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                buy_exchange TEXT NOT NULL,
+                sell_exchange TEXT NOT NULL,
+                buy_snapshot_at TEXT NOT NULL,
+                sell_snapshot_at TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                context_json TEXT NOT NULL
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_paper_rejections_symbol_time
+            ON paper_rejection_events(symbol, recorded_at)
+            """
+        )
         self._connection.commit()
 
     def record(
@@ -79,7 +101,7 @@ class PaperTradeStore:
         sell_snapshot_at: datetime,
         recorded_at: datetime | None = None,
     ) -> int:
-        """Persist one result and return its monotonically assigned event ID."""
+        """Persist one simulator result and return its event ID."""
         if not isinstance(result, PaperTradeResult):
             raise DataValidationError("result must be a PaperTradeResult")
         buy_time = ensure_utc(buy_snapshot_at)
@@ -106,24 +128,88 @@ class PaperTradeStore:
         self._connection.commit()
         return int(cursor.lastrowid)
 
+    def record_rejection(
+        self,
+        *,
+        symbol: str,
+        buy_exchange: str,
+        sell_exchange: str,
+        buy_snapshot_at: datetime,
+        sell_snapshot_at: datetime,
+        reason: str,
+        context: Mapping[str, object] | None = None,
+        recorded_at: datetime | None = None,
+    ) -> int:
+        """Persist a pre-trade exception or risk rejection without a fill result."""
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise DataValidationError("rejection reason must not be empty")
+        normalized_symbol = symbol.strip().upper()
+        normalized_buy = buy_exchange.strip().lower()
+        normalized_sell = sell_exchange.strip().lower()
+        if not normalized_symbol or "/" not in normalized_symbol:
+            raise DataValidationError("symbol must use BASE/QUOTE format")
+        if not normalized_buy or not normalized_sell:
+            raise DataValidationError("buy and sell exchange names must not be empty")
+        buy_time = ensure_utc(buy_snapshot_at)
+        sell_time = ensure_utc(sell_snapshot_at)
+        recorded_time = ensure_utc(recorded_at) if recorded_at is not None else utc_now()
+        context_json = json.dumps(
+            dict(context or {}), sort_keys=True, separators=(",", ":"), default=str
+        )
+        cursor = self._connection.execute(
+            """
+            INSERT INTO paper_rejection_events (
+                recorded_at, symbol, buy_exchange, sell_exchange, buy_snapshot_at,
+                sell_snapshot_at, reason, context_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                recorded_time.isoformat(),
+                normalized_symbol,
+                normalized_buy,
+                normalized_sell,
+                buy_time.isoformat(),
+                sell_time.isoformat(),
+                normalized_reason,
+                context_json,
+            ),
+        )
+        self._connection.commit()
+        return int(cursor.lastrowid)
+
     def get(self, event_id: int) -> dict[str, object] | None:
-        """Return one audit event, including its parsed payload, or None."""
+        """Return one simulation event, including its parsed payload, or None."""
         row = self._connection.execute(
             "SELECT * FROM paper_trade_events WHERE event_id = ?", (event_id,)
         ).fetchone()
-        return self._to_dict(row) if row is not None else None
+        return self._to_trade_dict(row) if row is not None else None
 
     def list_events(self, *, limit: int = 100) -> list[dict[str, object]]:
-        """Return newest events first; the limit must be between 1 and 10000."""
+        """Return newest simulation events first; limit must be between 1 and 10000."""
         if not 1 <= limit <= 10_000:
             raise DataValidationError("limit must be between 1 and 10000")
         rows = self._connection.execute(
             "SELECT * FROM paper_trade_events ORDER BY event_id DESC LIMIT ?", (limit,)
         ).fetchall()
-        return [self._to_dict(row) for row in rows]
+        return [self._to_trade_dict(row) for row in rows]
+
+    def list_rejections(self, *, limit: int = 100) -> list[dict[str, object]]:
+        """Return newest rejected pre-trade attempts first."""
+        if not 1 <= limit <= 10_000:
+            raise DataValidationError("limit must be between 1 and 10000")
+        rows = self._connection.execute(
+            "SELECT * FROM paper_rejection_events ORDER BY event_id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        events = []
+        for row in rows:
+            event = dict(row)
+            event["context"] = json.loads(event.pop("context_json"))
+            events.append(event)
+        return events
 
     @staticmethod
-    def _to_dict(row: sqlite3.Row) -> dict[str, object]:
+    def _to_trade_dict(row: sqlite3.Row) -> dict[str, object]:
         event = dict(row)
         event["payload"] = json.loads(event.pop("payload_json"))
         return event
