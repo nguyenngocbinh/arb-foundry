@@ -190,8 +190,8 @@ def test_scanner_returns_candidates_in_descending_net_spread_order() -> None:
     assert spreads == sorted(spreads, reverse=True)
 
 def test_scanner_rejects_zero_profit_at_zero_threshold() -> None:
-    buy = book("binance", [("100", "5")], [("100", "5")])
-    sell = book("okx", [("100", "5")], [("100", "5")])
+    buy = book("binance", [("99", "5")], [("100", "5")])
+    sell = book("okx", [("100", "5")], [("101", "5")])
     zero_fees = {"binance": "0", "okx": "0"}
 
     report = SpotArbitrageScanner().scan(
