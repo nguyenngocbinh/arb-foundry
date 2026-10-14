@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from arb_foundry.errors import DataValidationError
-from arb_foundry.models import OrderBook, OrderBookLevel
 from arb_foundry.market_replay import MarketReplayStore
+from arb_foundry.models import OrderBook, OrderBookLevel
 from arb_foundry.scanner import SpotArbitrageScanner
 
 NOW = datetime(2026, 10, 14, 10, tzinfo=UTC)
