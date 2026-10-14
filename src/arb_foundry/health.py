@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Event
 from time import perf_counter
-from typing import Iterable
 
 from arb_foundry.market_data import MarketDataAdapter
 from arb_foundry.time_utils import utc_now
