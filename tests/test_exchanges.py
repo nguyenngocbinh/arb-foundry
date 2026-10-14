@@ -68,7 +68,7 @@ def test_exchange_ticker_payloads_normalize(adapter, payload) -> None:
     ],
 )
 def test_exchange_order_books_normalize(adapter, payload) -> None:
-    book = adapter.parse_order_book(payload, "BTC-USDT")
+    book = adapter.parse_order_book(payload, "BTC/USDT")
     assert book.exchange == adapter.exchange
     assert book.symbol == "BTC/USDT"
     assert book.bids[0].price == Decimal("100")
