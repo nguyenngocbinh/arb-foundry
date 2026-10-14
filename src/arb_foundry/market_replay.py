@@ -122,6 +122,8 @@ class MarketReplayStore:
         """Validate a scan, persist every input/config value, and return its run ID."""
         if not isinstance(scanner, SpotArbitrageScanner):
             raise DataValidationError("scanner must be a SpotArbitrageScanner")
+        if not isinstance(fee_rates, Mapping):
+            raise DataValidationError("fee_rates must be a mapping")
         books = tuple(order_books)
         if any(not isinstance(book, OrderBook) for book in books):
             raise DataValidationError("order_books must contain only OrderBook instances")
@@ -227,7 +229,12 @@ class MarketReplayStore:
             if isinstance(exc, DataValidationError):
                 raise
             raise DataValidationError("stored market scan payload has invalid fields") from exc
-        return scanner.scan(books, fee_rates=fee_rates, target_quantity=quantity, now=scan_time)
+        return scanner.scan(
+            books,
+            fee_rates=fee_rates,
+            target_quantity=quantity,
+            now=scan_time,
+        )
 
     def list_runs(self, *, limit: int = 100) -> list[dict[str, object]]:
         """List run metadata newest first without exposing full snapshot payloads."""
