@@ -82,7 +82,7 @@ def _restore_book(raw: object) -> OrderBook:
             timestamp=datetime.fromisoformat(raw["timestamp"]),
             market_type=MarketType(raw["market_type"]),
         )
-    except (KeyError, TypeError, ValueError) as exc:
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
         if isinstance(exc, DataValidationError):
             raise
         raise DataValidationError("stored order book has invalid fields") from exc
@@ -143,8 +143,17 @@ class MarketReplayStore:
             normalized_fees[name] = str(parsed)
 
         # Run once before writing so invalid scanner inputs/config never create a replay row.
-        scanner.scan(books, fee_rates=normalized_fees, target_quantity=target_quantity, now=scan_time)
-        quantity = target_quantity if isinstance(target_quantity, Decimal) else Decimal(str(target_quantity))
+        scanner.scan(
+            books,
+            fee_rates=normalized_fees,
+            target_quantity=target_quantity,
+            now=scan_time,
+        )
+        quantity = (
+            target_quantity
+            if isinstance(target_quantity, Decimal)
+            else Decimal(str(target_quantity))
+        )
         if not quantity.is_finite():
             raise DataValidationError("target_quantity must be finite")
         payload: dict[str, object] = {
@@ -193,12 +202,18 @@ class MarketReplayStore:
         config = payload.get("scanner")
         fees = payload.get("fee_rates")
         books_raw = payload.get("order_books")
-        if not isinstance(config, dict) or not isinstance(fees, dict) or not isinstance(books_raw, list):
+        if (
+            not isinstance(config, dict)
+            or not isinstance(fees, dict)
+            or not isinstance(books_raw, list)
+        ):
             raise DataValidationError("stored market scan payload has invalid structure")
         try:
             scanner = SpotArbitrageScanner(
                 max_data_age_seconds=config["max_data_age_seconds"],
-                min_net_spread_bps=_decimal_text("min_net_spread_bps", config["min_net_spread_bps"]),
+                min_net_spread_bps=_decimal_text(
+                    "min_net_spread_bps", config["min_net_spread_bps"]
+                ),
             )
             scan_time = datetime.fromisoformat(payload["scan_now"])
             quantity = _decimal_text("target_quantity", payload["target_quantity"])
