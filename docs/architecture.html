@@ -25,28 +25,30 @@
   <p class="eyebrow">Research · Risk-first · Paper trading</p>
   <h1>Arb Foundry</h1>
   <p>A modular foundation for researching cross-exchange crypto arbitrage without placing real orders.</p>
-  <p class="notice"><strong>Safety boundary:</strong> live order submission is not implemented. This page describes the target architecture, not a claim that all components are already available.</p>
-  <h2>Target data flow</h2>
-  <section class="pipeline" aria-label="Target architecture pipeline">
-    <div class="stage"><strong>1. Exchange adapters</strong><span>Binance · OKX · Bybit · KuCoin — public market data first</span></div>
+  <p class="notice"><strong>Safety boundary:</strong> live order submission is not implemented. Public spot market-data adapters and a configurable health-check runner are implemented, but the host runtime must start the runner. This page distinguishes working components from planned components.</p>
+  <h2>Data flow</h2>
+  <section class="pipeline" aria-label="Architecture pipeline">
+    <div class="stage"><strong>1. Public exchange adapters — implemented</strong><span>Binance · OKX · Bybit · KuCoin; read-only ticker, order book and public API health endpoints</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>2. Market data normalization</strong><span>Ticker, order book, symbol mapping, UTC timestamps, freshness and depth validation</span></div>
+    <div class="stage"><strong>2. Market-data normalization — implemented</strong><span>Canonical BASE/QUOTE symbols, Decimal prices and quantities, UTC timestamps, stale-data validation</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>3. Opportunity scanner</strong><span>Gross/net spread after fees, executable-size VWAP and stale-data rejection</span></div>
+    <div class="stage"><strong>3. Opportunity scanner — planned</strong><span>Gross/net spread after fees, executable-size VWAP and insufficient-depth rejection</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
     <div class="grid">
-      <div class="stage"><strong>Classic spot–spot</strong><span>Compare buy and sell venues while accounting for transfer and inventory constraints.</span></div>
-      <div class="stage"><strong>Spot–perpetual</strong><span>Research funding, basis, margin and liquidation risks; no live execution.</span></div>
+      <div class="stage"><strong>Classic spot–spot — planned</strong><span>Compare buy and sell venues while accounting for transfer and inventory constraints.</span></div>
+      <div class="stage"><strong>Spot–perpetual — planned</strong><span>Research funding, basis, margin and liquidation risks; no live execution.</span></div>
     </div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>4. Risk engine + paper simulator</strong><span>Simulated fills, fees, slippage, latency, positions, PnL, limits and kill conditions</span></div>
+    <div class="stage"><strong>4. Risk engine + paper simulator — planned</strong><span>Simulated fills, fees, slippage, latency, positions, PnL, limits and kill conditions</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>5. Persistence, reporting and monitoring</strong><span>Reproducible evaluations, 24-hour API health checks, logs and failure analysis</span></div>
+    <div class="stage"><strong>5. Persistence, reporting and operations — planned</strong><span>Persistent health history, reproducible evaluations, error notifications and failure analysis</span></div>
   </section>
+  <h2>Implemented health checks</h2>
+  <p>The health-check service checks public exchange endpoints at startup and repeats at a configurable interval (24 hours by default). It records health, check time, latency and a safe error summary in memory. The application host must start the runner in a managed worker; no service starts automatically at import time.</p>
   <h2>Implementation phases</h2>
   <ol>
     <li>Project foundation, tests, lint and CI.</li>
-    <li>Public market-data adapters and 24-hour API health checks.</li>
+    <li>Public market-data adapters, freshness validation and health-check service.</li>
     <li>Depth-aware spot arbitrage scanner and net-spread calculation.</li>
     <li>Separate strategy modules for spot–spot and spot–perpetual research.</li>
     <li>Paper trading, risk limits, persistence and recovery tests.</li>
