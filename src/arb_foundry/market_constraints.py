@@ -7,7 +7,7 @@ operator configuration. This module does not fetch or guess exchange rules.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_DOWN, ROUND_FLOOR
+from decimal import ROUND_CEILING, ROUND_DOWN, ROUND_FLOOR, Decimal, InvalidOperation
 
 from arb_foundry.errors import DataValidationError
 from arb_foundry.market_data import normalize_symbol
