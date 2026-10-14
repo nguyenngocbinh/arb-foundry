@@ -40,6 +40,17 @@ def _json_payload(result: PaperTradeResult) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+def _normalize_strategy(strategy: str) -> str:
+    if not isinstance(strategy, str):
+        raise DataValidationError("strategy must be a string")
+    normalized = strategy.strip().lower()
+    if not normalized:
+        raise DataValidationError("strategy must not be empty")
+    if len(normalized) > 100:
+        raise DataValidationError("strategy must be at most 100 characters")
+    return normalized
+
+
 class PaperTradeStore:
     """SQLite-backed append/query interface for paper-trade audit events."""
 
@@ -60,14 +71,22 @@ class PaperTradeStore:
                 sell_exchange TEXT NOT NULL,
                 buy_snapshot_at TEXT NOT NULL,
                 sell_snapshot_at TEXT NOT NULL,
-                payload_json TEXT NOT NULL
+                payload_json TEXT NOT NULL,
+                strategy TEXT NOT NULL DEFAULT 'unspecified'
             )
             """
         )
+        self._ensure_strategy_column("paper_trade_events")
         self._connection.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_paper_events_symbol_time
             ON paper_trade_events(symbol, recorded_at)
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_paper_events_strategy_time
+            ON paper_trade_events(strategy, recorded_at)
             """
         )
         self._connection.execute(
@@ -81,17 +100,36 @@ class PaperTradeStore:
                 buy_snapshot_at TEXT NOT NULL,
                 sell_snapshot_at TEXT NOT NULL,
                 reason TEXT NOT NULL,
-                context_json TEXT NOT NULL
+                context_json TEXT NOT NULL,
+                strategy TEXT NOT NULL DEFAULT 'unspecified'
             )
             """
         )
+        self._ensure_strategy_column("paper_rejection_events")
         self._connection.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_paper_rejections_symbol_time
             ON paper_rejection_events(symbol, recorded_at)
             """
         )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_paper_rejections_strategy_time
+            ON paper_rejection_events(strategy, recorded_at)
+            """
+        )
         self._connection.commit()
+
+    def _ensure_strategy_column(self, table: str) -> None:
+        """Add strategy metadata to existing databases without dropping old events."""
+        columns = {
+            row["name"]
+            for row in self._connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if "strategy" not in columns:
+            self._connection.execute(
+                f"ALTER TABLE {table} ADD COLUMN strategy TEXT NOT NULL DEFAULT 'unspecified'"
+            )
 
     def record(
         self,
@@ -100,10 +138,12 @@ class PaperTradeStore:
         buy_snapshot_at: datetime,
         sell_snapshot_at: datetime,
         recorded_at: datetime | None = None,
+        strategy: str = "unspecified",
     ) -> int:
-        """Persist one simulator result and return its event ID."""
+        """Persist one simulator result, including its caller-supplied strategy label."""
         if not isinstance(result, PaperTradeResult):
             raise DataValidationError("result must be a PaperTradeResult")
+        normalized_strategy = _normalize_strategy(strategy)
         buy_time = ensure_utc(buy_snapshot_at)
         sell_time = ensure_utc(sell_snapshot_at)
         recorded_time = ensure_utc(recorded_at) if recorded_at is not None else utc_now()
@@ -111,8 +151,8 @@ class PaperTradeStore:
             """
             INSERT INTO paper_trade_events (
                 recorded_at, symbol, status, buy_exchange, sell_exchange,
-                buy_snapshot_at, sell_snapshot_at, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                buy_snapshot_at, sell_snapshot_at, payload_json, strategy
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 recorded_time.isoformat(),
@@ -123,6 +163,7 @@ class PaperTradeStore:
                 buy_time.isoformat(),
                 sell_time.isoformat(),
                 _json_payload(result),
+                normalized_strategy,
             ),
         )
         self._connection.commit()
@@ -139,6 +180,7 @@ class PaperTradeStore:
         reason: str,
         context: Mapping[str, object] | None = None,
         recorded_at: datetime | None = None,
+        strategy: str = "unspecified",
     ) -> int:
         """Persist a pre-trade exception or risk rejection without a fill result."""
         normalized_reason = reason.strip()
@@ -151,6 +193,7 @@ class PaperTradeStore:
             raise DataValidationError("symbol must use BASE/QUOTE format")
         if not normalized_buy or not normalized_sell:
             raise DataValidationError("buy and sell exchange names must not be empty")
+        normalized_strategy = _normalize_strategy(strategy)
         buy_time = ensure_utc(buy_snapshot_at)
         sell_time = ensure_utc(sell_snapshot_at)
         recorded_time = ensure_utc(recorded_at) if recorded_at is not None else utc_now()
@@ -161,8 +204,8 @@ class PaperTradeStore:
             """
             INSERT INTO paper_rejection_events (
                 recorded_at, symbol, buy_exchange, sell_exchange, buy_snapshot_at,
-                sell_snapshot_at, reason, context_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                sell_snapshot_at, reason, context_json, strategy
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 recorded_time.isoformat(),
@@ -173,6 +216,7 @@ class PaperTradeStore:
                 sell_time.isoformat(),
                 normalized_reason,
                 context_json,
+                normalized_strategy,
             ),
         )
         self._connection.commit()
