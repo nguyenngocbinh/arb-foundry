@@ -178,14 +178,14 @@ def test_rejects_invalid_venue_constraints_before_simulating() -> None:
             now=NOW,
         )
 
-    with pytest.raises(DataValidationError, match="price_tick"):
+    with pytest.raises(DataValidationError, match="min_notional"):
         strict_buy_rules = SymbolConstraints(
             exchange="binance",
             symbol="BTC/USDT",
-            price_tick="3",
+            price_tick="0.1",
             quantity_step="0.001",
             min_quantity="0.001",
-            min_notional="10",
+            min_notional="1000",
         )
         PaperTradingSimulator().simulate(
             buy,
