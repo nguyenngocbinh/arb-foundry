@@ -13,7 +13,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-This is the initial project-foundation stage. Exchange adapters, the opportunity scanner, persistence, and paper trading are not implemented yet. Do not interpret this scaffold as a trading bot.
+The foundation now includes validated settings, UTC timestamp helpers, typed domain models for tickers/order books/trades/opportunities, typed application errors, and logging configuration. Exchange adapters, the opportunity scanner, persistence, and paper trading are not implemented yet. Do not interpret this scaffold as a trading bot.
 
 See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1).
 
@@ -32,7 +32,17 @@ ruff check .
 
 ## Configuration
 
-Copy `.env.example` to `.env` if needed. The foundation does not read exchange credentials and requires no API keys. Keep secrets out of Git.
+Copy `.env.example` to `.env` if needed. Settings are read from environment variables; the foundation does not read exchange credentials and requires no API keys.
+
+Supported settings:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `APP_ENV` | `development` | `development`, `test`, or `production` |
+| `LOG_LEVEL` | `INFO` | Standard Python logging level |
+| `MARKET_DATA_STALE_AFTER_SECONDS` | `5` | Intended freshness threshold for market data |
+| `API_HEALTH_CHECK_INTERVAL_HOURS` | `24` | Planned exchange health-check cadence |
+| `PAPER_TRADING_ENABLED` | `true` | Safe default for future paper simulation |
 
 ## Safety invariants
 
