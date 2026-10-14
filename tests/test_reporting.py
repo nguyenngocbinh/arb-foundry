@@ -14,11 +14,13 @@ NOW = datetime(2026, 10, 14, 10, tzinfo=UTC)
 
 
 def _book(exchange: str, *, timestamp: datetime = NOW) -> OrderBook:
+    best_bid = "99" if exchange == "binance" else "102"
+    best_ask = "100" if exchange == "binance" else "103"
     return OrderBook(
         exchange=exchange,
         symbol="BTC/USDT",
-        bids=(OrderBookLevel("102", "2"),),
-        asks=(OrderBookLevel("100", "2"),),
+        bids=(OrderBookLevel(best_bid, "2"),),
+        asks=(OrderBookLevel(best_ask, "2"),),
         timestamp=timestamp,
     )
 
