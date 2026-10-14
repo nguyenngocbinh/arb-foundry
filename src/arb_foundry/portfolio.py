@@ -129,6 +129,95 @@ class PortfolioLedger:
     def realized_pnl(self) -> Decimal:
         return self._realized_pnl
 
+
+    def to_snapshot(self) -> dict[str, object]:
+        """Return a JSON-safe, versioned snapshot for durable paper-state recovery."""
+        return {
+            "schema_version": 1,
+            "quote_asset": self.quote_asset,
+            "balances": [
+                {"exchange": exchange, "asset": asset, "amount": str(amount)}
+                for (exchange, asset), amount in sorted(self._balances.items())
+            ],
+            "realized_pnl": str(self._realized_pnl),
+            "daily_realized_pnl": {
+                day: str(amount) for day, amount in sorted(self._daily_realized.items())
+            },
+            "peak_equity": (
+                str(self._peak_equity) if self._peak_equity is not None else None
+            ),
+        }
+
+    @classmethod
+    def from_snapshot(cls, snapshot: Mapping[str, object]) -> PortfolioLedger:
+        """Validate and restore a version-1 snapshot without silently defaulting fields."""
+        if not isinstance(snapshot, Mapping):
+            raise DataValidationError("portfolio snapshot must be a mapping")
+        if type(snapshot.get("schema_version")) is not int or snapshot.get("schema_version") != 1:
+            raise DataValidationError("unsupported portfolio snapshot schema_version")
+        quote_asset = snapshot.get("quote_asset")
+        raw_balances = snapshot.get("balances")
+        raw_daily = snapshot.get("daily_realized_pnl")
+        if not isinstance(quote_asset, str) or not isinstance(raw_balances, list):
+            raise DataValidationError("portfolio snapshot has invalid quote_asset or balances")
+        if not isinstance(raw_daily, Mapping):
+            raise DataValidationError("portfolio snapshot daily_realized_pnl must be a mapping")
+
+        balances: dict[tuple[str, str], str] = {}
+        for item in raw_balances:
+            if not isinstance(item, Mapping):
+                raise DataValidationError("portfolio snapshot balance entries must be mappings")
+            exchange, asset, amount = (
+                item.get("exchange"), item.get("asset"), item.get("amount")
+            )
+            if not isinstance(exchange, str) or not isinstance(asset, str):
+                raise DataValidationError("portfolio snapshot balance identity must be strings")
+            if not isinstance(amount, str):
+                raise DataValidationError("portfolio snapshot balance amount must be a string")
+            key = (_identity("exchange", exchange), _identity("asset", asset, upper=True))
+            if key in balances:
+                raise DataValidationError(f"duplicate normalized balance key: {key}")
+            balances[key] = amount
+
+        ledger = cls(balances, quote_asset=quote_asset)
+        raw_realized = snapshot.get("realized_pnl")
+        if not isinstance(raw_realized, str):
+            raise DataValidationError("portfolio snapshot realized_pnl must be a string")
+        ledger._realized_pnl = _decimal("realized_pnl", raw_realized)
+
+        daily: dict[str, Decimal] = {}
+        for raw_day, raw_amount in raw_daily.items():
+            if not isinstance(raw_day, str) or not isinstance(raw_amount, str):
+                raise DataValidationError("daily realized PnL keys and values must be strings")
+            try:
+                parsed_day = datetime.strptime(raw_day, "%Y-%m-%d").date()
+            except ValueError as exc:
+                raise DataValidationError("daily realized PnL keys must use YYYY-MM-DD") from exc
+            if parsed_day.isoformat() != raw_day:
+                raise DataValidationError("daily realized PnL keys must use YYYY-MM-DD")
+            daily[raw_day] = _decimal(f"daily realized PnL for {raw_day}", raw_amount)
+        ledger._daily_realized = daily
+
+        raw_peak = snapshot.get("peak_equity")
+        if raw_peak is not None:
+            if not isinstance(raw_peak, str):
+                raise DataValidationError("portfolio snapshot peak_equity must be a string or null")
+            peak = _decimal("peak_equity", raw_peak)
+            if peak < 0:
+                raise DataValidationError("portfolio snapshot peak_equity must not be negative")
+            ledger._peak_equity = peak
+        return ledger
+
+    def _replace_with(self, other: PortfolioLedger) -> None:
+        """Replace this ledger's state from a validated ledger; internal persistence hook."""
+        if not isinstance(other, PortfolioLedger):
+            raise DataValidationError("other must be a PortfolioLedger")
+        self.quote_asset = other.quote_asset
+        self._balances = dict(other._balances)
+        self._realized_pnl = other._realized_pnl
+        self._daily_realized = dict(other._daily_realized)
+        self._peak_equity = other._peak_equity
+
     def balance(self, exchange: str, asset: str) -> Decimal:
         """Return a balance, defaulting to zero when the key has never been seen."""
         return self._balances.get(

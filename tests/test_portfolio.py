@@ -182,3 +182,34 @@ def test_portfolio_rejects_mismatched_quote_asset() -> None:
     ledger = PortfolioLedger({("binance", "USDT"): "1000", ("okx", "BTC"): "2"})
     with pytest.raises(DataValidationError, match="does not match portfolio"):
         ledger.apply_trade(result(symbol="BTC/USDC"), now=NOW)
+
+
+
+def test_portfolio_snapshot_round_trip_preserves_all_accounting_state() -> None:
+    ledger = portfolio()
+    ledger.valuation({"BTC": "100"}, now=NOW)
+    ledger.apply_trade(result(), now=NOW)
+
+    restored = PortfolioLedger.from_snapshot(ledger.to_snapshot())
+
+    assert restored.quote_asset == ledger.quote_asset
+    assert restored.balances == ledger.balances
+    assert restored.realized_pnl == ledger.realized_pnl
+    assert restored.daily_realized_pnl(NOW) == ledger.daily_realized_pnl(NOW)
+    restored_value = restored.valuation({"BTC": "90"}, now=NOW + timedelta(minutes=1))
+    assert restored_value.peak_equity == Decimal("1200")
+
+
+def test_portfolio_snapshot_rejects_unsupported_schema_and_duplicate_keys() -> None:
+    snapshot = portfolio().to_snapshot()
+    snapshot["schema_version"] = 999
+    with pytest.raises(DataValidationError, match="schema_version"):
+        PortfolioLedger.from_snapshot(snapshot)
+
+    snapshot = portfolio().to_snapshot()
+    snapshot["balances"] = [
+        {"exchange": "binance", "asset": "BTC", "amount": "1"},
+        {"exchange": "BINANCE", "asset": "btc", "amount": "2"},
+    ]
+    with pytest.raises(DataValidationError, match="duplicate normalized"):
+        PortfolioLedger.from_snapshot(snapshot)

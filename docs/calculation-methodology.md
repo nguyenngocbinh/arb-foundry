@@ -184,3 +184,27 @@ The ledger is currently in-memory, so restart recovery is not provided. Mark pri
 ## 12. Rejected pre-trade audit events
 
 PaperTradeStore can append a separate rejection event when a freshness/validation exception or risk check rejects an attempt before a PaperTradeResult exists. Each event stores UTC record time, normalized symbol and venue names, both source snapshot timestamps, a reason and JSON context. Context values that are not directly JSON serializable are stringified. These records improve reproducibility but remain in the same SQLite trust boundary and are not tamper-proof.
+
+
+## 13. Durable portfolio snapshots and recovery
+
+`PortfolioLedger.to_snapshot()` exports a schema-versioned JSON-compatible object with the quote asset, balances by normalized exchange and asset, cumulative realized PnL, realized PnL grouped by UTC date, and the peak equity observed by a previous valuation. Decimal values are serialized as decimal strings; do not convert them to binary floats.
+
+`PortfolioLedger.from_snapshot()` validates schema version, balance identities, non-negative balances, numeric finiteness, and date keys before returning a new ledger. Unknown schema versions fail closed instead of silently defaulting fields.
+
+`PortfolioStateStore` appends each snapshot to SQLite and records UTC save time, portfolio identifier, schema version, and a SHA-256 checksum of canonical JSON. Recovery loads the newest snapshot for the requested portfolio identifier. If that snapshot fails checksum or schema validation, recovery raises an error; it does not silently fall back to an older state, because doing so could forget a previously accepted paper trade.
+
+### Durable trade-application sequence
+
+Use `PortfolioStateStore.apply_trade_and_save(ledger, result)` after the simulator has produced a filled/partial result and the risk engine has approved it:
+
+1. Clone the current ledger from a validated snapshot.
+2. Apply both simulated legs to the candidate ledger, checking buy-venue quote balance and sell-venue base inventory.
+3. Insert and commit the candidate snapshot in SQLite.
+4. Only after the commit succeeds, copy the candidate state into the caller's in-memory ledger.
+
+If accounting validation or the SQLite write fails, the original in-memory ledger remains unchanged. If the process exits after SQLite commits, a restart can load the committed snapshot. This API does not deduplicate results by trade/event ID, so callers must not apply the same result twice.
+
+The ledger is not automatically persisted by calling `PortfolioLedger.apply_trade()`. For durable operation, use `apply_trade_and_save` consistently. If `valuation()` raises the peak-equity watermark and that watermark must survive a restart, explicitly call `save(ledger)` after valuation.
+
+The checksum detects accidental payload corruption but is not tamper-proof: someone able to rewrite the SQLite file can recompute it. Use file-system access controls and backups. Snapshot persistence does not yet persist order-book inputs, risk-limit configuration, kill-switch state, or enough information to replay a strategy decision exactly.

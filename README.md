@@ -13,7 +13,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, durable trade history, latency modelling, persistent health history, and live runtime/service wiring are not implemented. This is not a trading bot.
+Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, paper-trade audit events, and versioned SQLite portfolio snapshots are implemented. Full order-book replay, latency modelling, persistent health history, and live runtime/service wiring remain open. This is not a trading bot.
 
 See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations.
 
@@ -188,3 +188,32 @@ No license has been selected. Until one is added, do not assume this repository 
 The in-memory PortfolioLedger tracks balances per exchange and asset, realized PnL, daily realized PnL, mark-to-market equity, exposure by exchange, peak equity and drawdown. A paired spot simulation requires quote-asset balance on the buy venue and base-asset inventory on the sell venue; the ledger will not invent transfers or borrow inventory.
 
 RiskEngine evaluates inventory sufficiency, maximum trade notional, optional per-exchange exposure, mark-to-market drawdown and daily realized loss. It returns a decision and metrics but never applies a trade. Call PortfolioLedger.apply_trade only after an approved decision. Supply asset marks in the portfolio quote currency (USDT by default). The ledger is in-memory in this milestone; SQLite stores audit events, not recoverable portfolio state.
+
+
+## Durable paper portfolio state
+
+Portfolio accounting can be recovered after a restart with a separate SQLite state store. It stores versioned snapshots of balances by venue/asset, quote asset, total and UTC-daily realized PnL, and the peak equity observed by valuation. Decimal values are stored as strings.
+
+```python
+from arb_foundry.portfolio import PortfolioLedger
+from arb_foundry.portfolio_store import PortfolioStateStore
+
+database = "data/paper-state.sqlite3"
+with PortfolioStateStore(database) as store:
+    ledger = store.load_latest(portfolio_id="research-btc")
+    if ledger is None:
+        ledger = PortfolioLedger(
+            {("binance", "USDT"): "1000", ("okx", "BTC"): "0.02"},
+            quote_asset="USDT",
+        )
+        store.save(ledger, portfolio_id="research-btc")
+
+    # After the simulator returns a FILLED/PARTIAL result and risk approves it:
+    # store.apply_trade_and_save(ledger, result, portfolio_id="research-btc")
+    print(ledger.balances)
+    print(store.list_snapshots(portfolio_id="research-btc", limit=10))
+```
+
+Important: `apply_trade_and_save` is the safe durable path for accounting. It computes a candidate state, commits its snapshot, then updates the supplied in-memory ledger. If validation or SQLite commit fails, that ledger remains unchanged. It does not run the risk engine for you; call it only after the paper result and risk decision are accepted. Save again after a valuation if you need the updated peak-equity watermark to survive restart.
+
+Snapshots are append-only at the application API. A SHA-256 checksum detects accidental payload changes, but is not a cryptographic signature and cannot prevent an actor with database write access from rewriting both payload and checksum. Back up the SQLite file, restrict write access, and treat checksum failures as a stop-and-investigate condition. This store persists portfolio state only; full order-book replay, strategy-level reporting, and a persistent kill switch are separate follow-up milestones.
