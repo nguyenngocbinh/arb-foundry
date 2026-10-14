@@ -13,7 +13,6 @@ from enum import StrEnum
 from arb_foundry.errors import DataValidationError
 from arb_foundry.models import MarketType, OrderBook
 
-
 _BPS = Decimal("10000")
 _ZERO = Decimal("0")
 
