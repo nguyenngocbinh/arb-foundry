@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Mapping
+from collections.abc import Mapping
 
 from arb_foundry.errors import DataValidationError
 from arb_foundry.paper import PaperFillStatus, PaperTradeResult
@@ -286,7 +286,9 @@ class RiskEngine:
             for exchange, amount in projected_exposure.items():
                 metrics[f"exposure:{exchange}"] = str(amount)
                 if amount > self.limits.max_exchange_exposure:
-                    return RiskDecision(False, f"max_exchange_exposure exceeded on {exchange}", metrics)
+                    return RiskDecision(
+                        False, f"max_exchange_exposure exceeded on {exchange}", metrics
+                    )
 
         if self.limits.max_drawdown_pct is not None:
             peak = max(current_value.peak_equity, projected_equity)

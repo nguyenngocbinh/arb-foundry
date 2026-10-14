@@ -129,7 +129,10 @@ def test_risk_engine_approves_within_limits() -> None:
     ("limits", "expected_reason"),
     [
         (RiskLimits(max_trade_notional="99"), "max_trade_notional"),
-        (RiskLimits(max_trade_notional="200", max_exchange_exposure="150"), "max_exchange_exposure"),
+        (
+            RiskLimits(max_trade_notional="200", max_exchange_exposure="150"),
+            "max_exchange_exposure",
+        ),
     ],
 )
 def test_risk_engine_rejects_limit_breaches(limits: RiskLimits, expected_reason: str) -> None:
