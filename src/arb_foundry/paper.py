@@ -7,7 +7,7 @@ performed. The result is a simplified execution estimate, not a fill guarantee.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
