@@ -33,7 +33,7 @@ def normalize_symbol(symbol: str) -> str:
     splitting them without exchange metadata can produce incorrect markets.
     """
     value = symbol.strip().upper().replace("-", "/")
-    parts = value.split("/")
+    parts = [part.strip() for part in value.split("/")]
     if len(parts) != 2 or not all(parts):
         raise DataValidationError("symbol must use BASE/QUOTE or BASE-QUOTE format")
     if any(any(character.isspace() for character in part) for part in parts):
