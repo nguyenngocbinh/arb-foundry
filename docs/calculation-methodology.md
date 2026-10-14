@@ -229,3 +229,33 @@ The checksum detects accidental payload corruption but is not tamper-proof: some
 - SHA-256 detects accidental corruption only. It is not a signature or tamper-proof audit trail; an actor with database write access can rewrite the payload and digest.
 - The store is append-only through its public API, but SQLite can still be edited directly. Restrict file access and retain backups.
 - The store includes no private credentials, authenticated endpoints, or live order execution. It does not persist risk-engine configuration, portfolio state, simulator fills, or kill-switch state in the same run record; those remain separate records/milestones.
+
+
+## 15. Paper-trading evaluation reports
+
+The reporting module aggregates persisted `PaperTradeStore` rows. The
+reporting window is UTC and start-inclusive/end-exclusive:
+\[
+t_{since} \le t_{recorded} < t_{until}
+\]
+Filtering uses the audit event's `recorded_at`, not the order-book timestamp.
+Grouping dimensions include normalized symbol, buy venue, sell venue, venue
+pair, caller-supplied strategy label, and UTC calendar day. Strategy labels
+are not inferred from market data. Existing SQLite databases receive a
+non-destructive schema migration; historical rows are labelled
+`unspecified` because their strategy cannot be recovered reliably.
+
+For each group, the report sums stored gross PnL, buy and sell fees, the
+simulator's slippage-cost estimate, and net PnL. Net PnL is already computed
+from the simulator's slippage-adjusted leg prices and fees; fee/slippage report
+columns are explanatory breakdowns and must not be deducted from net PnL again.
+Simulator rejections and pre-trade rejection audit events are counted
+separately because only the former has a `PaperTradeResult`.
+
+The report caps each source query at a configurable maximum of 10,000 rows and
+sets `possibly_truncated` when a cap is reached. A capped report is not a
+complete historical total; use smaller time windows to avoid omitting older
+rows. The module does not infer missing events, deduplicate event IDs, reconcile
+external cash flows, or establish live-trading profitability. Caller-supplied
+strategy tags and SQLite rows remain within the existing application-level
+audit trust boundary.
