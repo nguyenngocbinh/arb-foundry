@@ -39,13 +39,13 @@
       <div class="stage"><strong>Spot–perpetual — planned</strong><span>Separate research strategy for funding, basis, margin and liquidation risks; no live execution.</span></div>
     </div>
     <div class="arrow" aria-hidden="true">↓</div>
-    <div class="stage"><strong>4. Risk engine + paper simulator — planned</strong><span>Simulated fills, fees, slippage, latency, positions, PnL, limits and kill conditions</span></div>
+    <div class="stage"><strong>4. Paper fill simulator — initial implementation</strong><span>Deterministic visible-depth fills, fees, adverse slippage and paired partial-fill option; balance accounting, latency, durable audit log and risk limits remain planned</span></div>
     <div class="arrow" aria-hidden="true">↓</div>
     <div class="stage"><strong>5. Persistence, reporting and operations — planned</strong><span>Persistent health history, reproducible evaluations, error notifications and failure analysis</span></div>
   </section>
   <h2>Scanner assumptions</h2>
   <p>Fee rates are explicit decimal fractions of quote notional (0.001 = 0.1%) and are illustrative unless verified independently. The scanner assumes fees on quote notional for both legs, requires the full target base quantity to be visible on both sides, and rejects stale books. It does not yet model transfer/withdrawal costs, inventory availability, latency, partial execution, rebates, funding or price movement after the snapshot. An opportunity is not a promise of profit.</p>
-  <h2>Implemented health checks</h2>
+  <h2>Calculation documentation</h2>\n  <p><a href="calculation-methodology.md">Calculation methodology</a> documents VWAP, gross/net PnL and spread in basis points, fee assumptions, symbol filters, slippage, partial-fill behavior, worked numerical examples and modelling limits.</p>\n  <h2>Implemented health checks</h2>
   <p>The health-check service checks public exchange endpoints at startup and repeats at a configurable interval (24 hours by default). It records health, check time, latency and an error summary in memory. The application host must start the runner in a managed worker; no service starts automatically at import time.</p>
   <h2>Implementation phases</h2>
   <ol>
