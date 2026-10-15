@@ -86,14 +86,15 @@ def test_corrupt_state_or_missing_audit_event_fails_closed(tmp_path) -> None:
     with KillSwitchStore(database) as store:
         store.arm("approved", changed_at=NOW)
         store._connection.execute(
-            "UPDATE kill_switch_current SET state = 'unknown' WHERE singleton_id = 1"
+            "UPDATE kill_switch_current SET changed_at = 'not-a-timestamp' WHERE singleton_id = 1"
         )
         store._connection.commit()
-        with pytest.raises(DataValidationError, match="state is invalid"):
+        with pytest.raises(DataValidationError, match="timestamp invalid"):
             store.require_armed()
 
         store._connection.execute(
-            "UPDATE kill_switch_current SET state = 'armed' WHERE singleton_id = 1"
+            "UPDATE kill_switch_current SET changed_at = ? WHERE singleton_id = 1",
+            (NOW.isoformat(),),
         )
         store._connection.execute("DELETE FROM kill_switch_events")
         store._connection.commit()
