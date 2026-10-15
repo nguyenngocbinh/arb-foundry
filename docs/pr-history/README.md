@@ -27,6 +27,7 @@ Tài liệu lưu lại lịch sử triển khai theo từng PR. Mỗi PR có m�
 | [PR-11.md](PR-11.md) | #11 | Reporting/evaluation | Merged |
 | [PR-12.md](PR-12.md) | #12 | Persistent paper kill switch | Merged |
 | [PR-13.md](PR-13.md) | #13 | Latency/fill-probability/legging risk | Draft/Open — not merged |
+| [PR-14.md](PR-14.md) | #14 | Lưu lịch sử từng PR, index và liên kết README | Draft/Open — not merged |
 
 ## Nguồn liên quan
 
