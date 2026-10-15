@@ -13,7 +13,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 ## Current status
 
-Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, paper-trade audit events, and versioned SQLite portfolio snapshots are implemented. Deterministic scanner replay from checksummed SQLite market snapshots is implemented; strategy-level reporting, latency modelling, persistent health history, and live runtime/service wiring remain open. This is not a trading bot.
+Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, paper-trade audit events, and versioned SQLite portfolio snapshots are implemented. Deterministic scanner replay from checksummed SQLite market snapshots and strategy-level paper reporting are implemented. A persistent SQLite kill switch can gate simulations when explicitly wired into the simulator; latency modelling, persistent health history, and managed runtime/service wiring remain open. This is not a trading bot.
 
 See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations.
 
@@ -261,3 +261,15 @@ as separate diagnostic columns; do not subtract them a second time from
 `net_pnl`. Reports flag a possibly truncated result when the configured
 per-table query limit is reached. Historical audit rows are retained during
 the additive strategy-column migration and are labelled `unspecified`.
+
+
+## Persistent paper kill switch
+
+`KillSwitchStore` persists a fail-closed state in SQLite. A new database starts
+`halted`; call `arm(reason)` explicitly to permit simulation attempts, and
+`halt(reason)` to block subsequent attempts that use the same store. Pass the
+store to `PaperTradingSimulator(kill_switch=store)`. Legacy callers that omit
+the optional store do not receive kill-switch protection. The switch cannot
+cancel an in-progress simulation, supervise processes, or provide distributed
+locking. See [docs/kill-switch.md](docs/kill-switch.md) for restart behavior,
+corruption/I/O failure semantics, state transitions, and limitations.
