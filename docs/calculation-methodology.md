@@ -280,3 +280,29 @@ distributed locking. Existing callers remain compatible when
 `kill_switch=None`, so a safety-sensitive runner must explicitly pass the
 store to every simulator instance. Full operational semantics are in
 [docs/kill-switch.md](kill-switch.md).
+
+
+## 17. Latency, fill probability, and legging-risk scenarios
+
+The separate `arb_foundry.execution_model` uses a seeded random generator to
+sample per-leg integer latency from explicit inclusive bounds and independently
+sample each leg's fill/no-fill outcome from its configured probability. These
+are deliberately simple assumptions, not exchange observations. See
+[execution-model.md](execution-model.md) for units, API usage, outcomes,
+calibration metadata, reproducibility, and known limitations.
+
+For a requested base quantity (Q), the model reports the signed simulated
+inventory delta:
+- Buy leg only: (+Q), representing unhedged long inventory.
+- Sell leg only: (-Q), representing unhedged short exposure.
+- Both legs or neither leg: zero net paired inventory delta.
+
+The reported legging rate is the fraction of trials where exactly one leg fills.
+It is not a risk-adjusted loss estimate and does not trigger an automatic hedge.
+Scenario comparisons share the supplied seed for reproducibility; retain the
+assumptions, seed, trial count, and code revision with evaluation outputs.
+
+A `calibrated` source label requires caller-supplied sample size and a note, but
+the library does not verify the evidence. A public order-book snapshot alone
+does not establish a fill probability. Do not present assumption-based results
+as empirically calibrated or as evidence of live profitability.

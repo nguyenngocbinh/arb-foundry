@@ -89,3 +89,38 @@ control. Monitor and back up the state database.
    reset state; deletion recreates a HALTED switch, but also discards history.
 5. Add process supervision and alerts separately; this module does not manage
    service lifecycle, signals, or notifications.
+
+
+## Future live-execution kill switch — design note only
+
+This section records a future architecture requirement; it is **not implemented**
+and must not be interpreted as live-order capability. Before considering a live
+execution adapter, a dedicated design/review milestone should cover:
+
+1. A central kill-switch controller with durable state, operator authorization,
+   explicit resume policy, and an append-only operational audit trail.
+2. A mandatory order gateway that checks the global halt state and a
+   monotonically increasing generation/fencing token immediately before every
+   submission and retry. All workers and queued jobs must use this gateway.
+3. A durable order-intent ledger that can reconcile client order IDs, exchange
+   order IDs, partial fills, cancellation requests, and unknown outcomes after
+   timeouts or process restarts.
+4. Stop orchestration that blocks new submissions first, requests cancellation
+   for open orders, then queries each exchange to verify final order status.
+   A cancel request is not proof of cancellation; fills can race with cancel.
+5. Position and legging-risk reconciliation after stopping. Any unmatched leg
+   must follow an explicit, separately approved hold/hedge/reduce policy; a
+   kill switch must not blindly market-close positions without a risk policy.
+6. An explicit `DEGRADED`/`UNKNOWN` state when an exchange cannot be reached
+   or order/position state cannot be verified. Never report a fully safe stop
+   just because a request was sent.
+7. Failure-injection tests for concurrent workers, stale fencing tokens,
+   network timeouts, partial fills, cancel/fill races, duplicate retries, and
+   restart recovery.
+
+A distributed lock by itself is not sufficient: a paused worker may resume
+after its lease expires. Fencing must be enforced at the submission boundary,
+and exchange-side state still requires reconciliation. Even then, an external
+exchange API cannot guarantee that an already transmitted request is undone.
+No authenticated endpoints, exchange credentials, live order submission, or
+cancellation calls are included in the current repository.
