@@ -15,7 +15,7 @@ A modular cryptocurrency arbitrage **research** engine, rebuilt incrementally wi
 
 Implemented: validated configuration and domain models; UTC timestamp utilities; read-only REST adapters for the four exchanges; symbol normalization; stale-data validation; in-memory health-check runner; depth-aware spot scanner; explicit symbol-filter validation; and a deterministic paper fill simulator for visible depth, fees, slippage, and optional paired partial fills. The scanner and simulator never place orders. Simulated balances/positions, paper-trade audit events, and versioned SQLite portfolio snapshots are implemented. Deterministic scanner replay from checksummed SQLite market snapshots and strategy-level paper reporting are implemented. A persistent SQLite kill switch can gate simulations when explicitly wired into the simulator. A separate seeded latency/fill-probability model supports paper sensitivity analysis; persistent health history and managed runtime/service wiring remain open. See [execution assumptions](docs/execution-model.md). This is not a trading bot.
 
-See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations.
+See the [rebuild roadmap](https://github.com/nguyenngocbinh/arb-foundry/issues/1), [HTML architecture page](docs/architecture.html), and [calculation methodology](docs/calculation-methodology.md) for formulas, units, examples, assumptions, and limitations. The chronological implementation record is in [PR work history](docs/pr-history/README.md), with one file per PR.
 
 ## Development setup
 
