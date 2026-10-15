@@ -1,5 +1,5 @@
-from decimal import Decimal
 import random
+from decimal import Decimal
 
 import pytest
 
