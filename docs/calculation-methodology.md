@@ -259,3 +259,24 @@ rows. The module does not infer missing events, deduplicate event IDs, reconcile
 external cash flows, or establish live-trading profitability. Caller-supplied
 strategy tags and SQLite rows remain within the existing application-level
 audit trust boundary.
+
+
+## 16. Persistent paper kill switch
+
+The optional `KillSwitchStore` gates `PaperTradingSimulator.simulate` before
+input validation and fill calculations. State is persisted in SQLite as
+`halted` or `armed`, with a transition event written in the same transaction.
+A fresh database initializes to `halted`; only an explicit `arm(reason)`
+allows calls that use that store to continue. `halt(reason)` persists a stop
+for subsequent gate checks. The state is not automatically re-armed or reset
+on restart.
+
+Missing/invalid state and a missing referenced audit event raise a validation
+error; SQLite read/lock/I/O errors propagate instead of being treated as
+permission. A failed transition rolls back both state and history. The switch
+is a local paper-simulation gate, not a live-order control. It does not cancel
+an in-flight call, enforce itself on code paths that omit the store, or provide
+distributed locking. Existing callers remain compatible when
+`kill_switch=None`, so a safety-sensitive runner must explicitly pass the
+store to every simulator instance. Full operational semantics are in
+[docs/kill-switch.md](kill-switch.md).
