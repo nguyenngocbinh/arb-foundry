@@ -120,13 +120,19 @@ class KillSwitchStore:
         try:
             state = KillSwitchState(row["state"])
         except ValueError as exc:
-            raise DataValidationError("kill-switch state is invalid; simulation must remain halted") from exc
+            raise DataValidationError(
+                "kill-switch state is invalid; simulation must remain halted"
+            ) from exc
         if row["event_exists"] is None:
-            raise DataValidationError("kill-switch audit event missing; simulation must remain halted")
+            raise DataValidationError(
+                "kill-switch audit event missing; simulation must remain halted"
+            )
         try:
             changed_at = ensure_utc(datetime.fromisoformat(row["changed_at"]))
         except (TypeError, ValueError) as exc:
-            raise DataValidationError("kill-switch timestamp invalid; simulation must remain halted") from exc
+            raise DataValidationError(
+                "kill-switch timestamp invalid; simulation must remain halted"
+            ) from exc
         return KillSwitchStatus(
             state=state,
             reason=row["reason"],
@@ -147,7 +153,9 @@ class KillSwitchStore:
         """Explicitly enable the paper-simulation gate and append a transition."""
         return self._transition(KillSwitchState.ARMED, reason, changed_at=changed_at)
 
-    def halt(self, reason: str = "manual stop", *, changed_at: datetime | None = None) -> KillSwitchStatus:
+    def halt(
+        self, reason: str = "manual stop", *, changed_at: datetime | None = None
+    ) -> KillSwitchStatus:
         """Persist a stop immediately for subsequent gate checks."""
         return self._transition(KillSwitchState.HALTED, reason, changed_at=changed_at)
 
