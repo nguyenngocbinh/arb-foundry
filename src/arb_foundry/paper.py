@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
 from arb_foundry.errors import DataValidationError
+from arb_foundry.kill_switch import KillSwitchStore
 from arb_foundry.market_constraints import SymbolConstraints
 from arb_foundry.market_data import validate_freshness
 from arb_foundry.models import MarketType, OrderBook, TradeSide
@@ -77,20 +78,29 @@ def _vwap(levels, quantity: Decimal) -> Decimal:
 
 
 class PaperTradingSimulator:
-    """Simulate paired spot fills after freshness and optional venue-filter checks."""
+    """Simulate paired spot fills with optional persistent kill-switch gating.
+
+    Supply a KillSwitchStore to enforce its persisted state before each
+    simulation. Omitting it preserves legacy behavior and means no kill-switch
+    gate is applied; safety-sensitive research runners should always supply it.
+    """
 
     def __init__(
         self,
         *,
         max_data_age_seconds: int = 5,
         max_snapshot_skew_seconds: int = 5,
+        kill_switch: KillSwitchStore | None = None,
     ) -> None:
         if max_data_age_seconds <= 0:
             raise DataValidationError("max_data_age_seconds must be greater than zero")
         if max_snapshot_skew_seconds < 0:
             raise DataValidationError("max_snapshot_skew_seconds must not be negative")
+        if kill_switch is not None and not isinstance(kill_switch, KillSwitchStore):
+            raise DataValidationError("kill_switch must be a KillSwitchStore or None")
         self.max_data_age_seconds = max_data_age_seconds
         self.max_snapshot_skew_seconds = max_snapshot_skew_seconds
+        self.kill_switch = kill_switch
 
     def simulate(
         self,
@@ -105,6 +115,10 @@ class PaperTradingSimulator:
         sell_constraints: SymbolConstraints | None = None,
         now: datetime | None = None,
     ) -> PaperTradeResult:
+        # Check before validating inputs or computing fills. A halted, missing,
+        # corrupt, or unreadable switch must never permit this simulation.
+        if self.kill_switch is not None:
+            self.kill_switch.require_armed()
         requested = _decimal("quantity", quantity)
         if requested <= 0:
             raise DataValidationError("quantity must be greater than zero")
