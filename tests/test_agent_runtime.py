@@ -50,7 +50,12 @@ def test_rejects_invalid_balance_json() -> None:
 
 
 class FakeAdapter:
-    def __init__(self, exchange: str, bids: tuple[tuple[str, str], ...], asks: tuple[tuple[str, str], ...]):
+    def __init__(
+        self,
+        exchange: str,
+        bids: tuple[tuple[str, str], ...],
+        asks: tuple[tuple[str, str], ...],
+    ):
         self.exchange = exchange
         now = datetime.now(UTC)
         self.book = OrderBook(
