@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from collections.abc import Iterable
 
 from arb_foundry.errors import ConfigurationError, DataValidationError
 from arb_foundry.exchanges import PublicRestAdapter, default_adapters
@@ -139,7 +139,9 @@ class SpotAgentConfig:
             max_drawdown_pct=_decimal(
                 "AGENT_MAX_DRAWDOWN_PCT", env.get("AGENT_MAX_DRAWDOWN_PCT", "3")
             ),
-            max_daily_loss=_decimal("AGENT_MAX_DAILY_LOSS", env.get("AGENT_MAX_DAILY_LOSS", "10")),
+            max_daily_loss=_decimal(
+                "AGENT_MAX_DAILY_LOSS", env.get("AGENT_MAX_DAILY_LOSS", "10")
+            ),
             order_book_depth=int(env.get("AGENT_ORDER_BOOK_DEPTH", "20")),
             database_dir=Path(env.get("AGENT_DATABASE_DIR", "data/agent")),
             portfolio_id=env.get("AGENT_PORTFOLIO_ID", "small-capital-spot"),
@@ -186,12 +188,14 @@ class AutonomousSpotAgent:
             max_data_age_seconds=config.max_data_age_seconds,
             max_snapshot_skew_seconds=config.max_snapshot_skew_seconds,
         )
-        self.risk = RiskEngine(RiskLimits(
-            max_trade_notional=config.max_trade_notional,
-            max_exchange_exposure=config.max_exchange_exposure,
-            max_drawdown_pct=config.max_drawdown_pct,
-            max_daily_loss=config.max_daily_loss,
-        ))
+        self.risk = RiskEngine(
+            RiskLimits(
+                max_trade_notional=config.max_trade_notional,
+                max_exchange_exposure=config.max_exchange_exposure,
+                max_drawdown_pct=config.max_drawdown_pct,
+                max_daily_loss=config.max_daily_loss,
+            )
+        )
 
     def _fetch_books(self) -> list[OrderBook]:
         books: list[OrderBook] = []
@@ -218,7 +222,10 @@ class AutonomousSpotAgent:
             if quote == "USDT":
                 mid = (book.bids[0].price + book.asks[0].price) / Decimal("2")
                 marks.setdefault(base, []).append(mid)
-        return {asset: sum(values, Decimal("0")) / len(values) for asset, values in marks.items()}
+        return {
+            asset: sum(values, Decimal("0")) / len(values)
+            for asset, values in marks.items()
+        }
 
     def run_once(self) -> AgentCycleReport:
         """Run one cycle; the persisted paper kill switch must be explicitly armed."""
@@ -233,9 +240,11 @@ class AutonomousSpotAgent:
         decisions: list[dict[str, object]] = []
         opportunities: list[dict[str, str]] = []
         approved = rejected = simulated = 0
-        with KillSwitchStore(self.config.database_dir / "paper-kill-switch.sqlite3") as switch, \
-             PaperTradeStore(self.config.database_dir / "paper-trades.sqlite3") as trades, \
-             PortfolioStateStore(self.config.database_dir / "portfolio.sqlite3") as states:
+        with (
+            KillSwitchStore(self.config.database_dir / "paper-kill-switch.sqlite3") as switch,
+            PaperTradeStore(self.config.database_dir / "paper-trades.sqlite3") as trades,
+            PortfolioStateStore(self.config.database_dir / "portfolio.sqlite3") as states,
+        ):
             switch.require_armed()
             self.simulator.kill_switch = switch
             ledger = states.load_latest(portfolio_id=self.config.portfolio_id)
@@ -261,7 +270,9 @@ class AutonomousSpotAgent:
                     decision = self.risk.evaluate(result, ledger, mark_prices=marks)
                     accepted = decision.approved and result.status is not PaperFillStatus.REJECTED
                     trades.record(
-                        result, buy_snapshot_at=buy.timestamp, sell_snapshot_at=sell.timestamp,
+                        result,
+                        buy_snapshot_at=buy.timestamp,
+                        sell_snapshot_at=sell.timestamp,
                         strategy="autonomous-spot-agent",
                     )
                     if accepted:
@@ -275,7 +286,8 @@ class AutonomousSpotAgent:
                             symbol=item.symbol,
                             buy_exchange=item.buy_exchange,
                             sell_exchange=item.sell_exchange,
-                            buy_snapshot_at=buy.timestamp, sell_snapshot_at=sell.timestamp,
+                            buy_snapshot_at=buy.timestamp,
+                            sell_snapshot_at=sell.timestamp,
                             reason=(
                                 decision.reason
                                 if not decision.approved
@@ -295,7 +307,9 @@ class AutonomousSpotAgent:
                     reason = f"{type(exc).__name__}: {exc}"
                     decisions.append({"symbol": item.symbol, "approved": False, "reason": reason})
                     trades.record_rejection(
-                        symbol=item.symbol, buy_exchange=item.buy_exchange, sell_exchange=item.sell_exchange,
+                        symbol=item.symbol,
+                        buy_exchange=item.buy_exchange,
+                        sell_exchange=item.sell_exchange,
                         buy_snapshot_at=buy.timestamp, sell_snapshot_at=sell.timestamp,
                         reason=reason,
                         strategy="autonomous-spot-agent",
@@ -303,5 +317,6 @@ class AutonomousSpotAgent:
         return AgentCycleReport(
             scanned_books=len(books), candidate_count=len(scan.opportunities),
             simulated_count=simulated, approved_count=approved, rejected_count=rejected,
-            opportunities=tuple(opportunities), decisions=tuple(decisions),
+            opportunities=tuple(opportunities),
+            decisions=tuple(decisions),
         )
