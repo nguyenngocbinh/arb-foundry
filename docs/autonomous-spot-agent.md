@@ -33,8 +33,8 @@ inter-exchange transfers or borrows assets.
 
 | Setting | Default |
 |---|---:|
-| Symbols | BTC/USDT, ETH/USDT |
-| Target quantity | 0.001 base units |
+| Symbols | BTC/USDT |
+| Target quantity | 0.0003 BTC |
 | Minimum net spread | 10 bps |
 | Assumed fee per venue | 0.10% |
 | Adverse slippage | 5 bps per leg |
@@ -64,7 +64,7 @@ does not read exchange account balances:
     $env:AGENT_INITIAL_BALANCES='{"binance:USDT":"100","okx:BTC":"0.01","okx:USDT":"100"}'
     $env:AGENT_SYMBOLS='BTC/USDT'
     $env:AGENT_EXCHANGES='binance,okx'
-    $env:AGENT_TARGET_QUANTITY='0.001'
+    $env:AGENT_TARGET_QUANTITY='0.0003'
     $env:AGENT_MIN_NET_SPREAD_BPS='10'
     $env:AGENT_MAX_TRADE_NOTIONAL='50'
     $env:AGENT_DEFAULT_FEE_RATE='0.001'
@@ -81,6 +81,7 @@ explicitly arm paper simulation before running:
     python -m arb_foundry.agent_cli status
     python -m arb_foundry.agent_cli arm-paper --reason "approved paper test"
     python -m arb_foundry.agent_cli run-once
+    python -m arb_foundry.agent_cli run-loop --interval-seconds 15
     python -m arb_foundry.agent_cli halt-paper --reason "operator stop"
 
 Run run-once repeatedly from a managed scheduler only after operational
