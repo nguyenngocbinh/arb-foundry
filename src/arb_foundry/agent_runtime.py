@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 from arb_foundry.errors import ConfigurationError, DataValidationError
 from arb_foundry.exchanges import PublicRestAdapter, default_adapters
@@ -81,7 +81,9 @@ class SpotAgentConfig:
             raise ConfigurationError("exchange list must not contain duplicates")
         object.__setattr__(self, "exchanges", exchanges)
         if any(not symbol.endswith("/USDT") for symbol in self.symbols):
-            raise ConfigurationError("small-capital profile currently supports USDT-quoted spot pairs only")
+            raise ConfigurationError(
+                "small-capital profile currently supports USDT-quoted spot pairs only"
+            )
         if len(exchanges) < 2:
             raise ConfigurationError("at least two exchanges are required")
         if self.target_quantity <= 0 or self.min_net_spread_bps < 0 or self.slippage_bps < 0:
@@ -106,23 +108,37 @@ class SpotAgentConfig:
             raise ConfigurationError("portfolio_id must not be empty")
 
     @classmethod
-    def from_env(cls, environ: dict[str, str] | None = None) -> "SpotAgentConfig":
+    def from_env(cls, environ: dict[str, str] | None = None) -> SpotAgentConfig:
         env = os.environ if environ is None else environ
         exchanges = _csv(env.get("AGENT_EXCHANGES", "binance,okx,bybit,kucoin"))
-        default_fee = _decimal("AGENT_DEFAULT_FEE_RATE", env.get("AGENT_DEFAULT_FEE_RATE", "0.001"))
+        default_fee = _decimal(
+            "AGENT_DEFAULT_FEE_RATE", env.get("AGENT_DEFAULT_FEE_RATE", "0.001")
+        )
         fees = {exchange: default_fee for exchange in exchanges}
         return cls(
             symbols=_csv(env.get("AGENT_SYMBOLS", "BTC/USDT")),
             exchanges=exchanges,
             fee_rates=fees,
-            target_quantity=_decimal("AGENT_TARGET_QUANTITY", env.get("AGENT_TARGET_QUANTITY", "0.0003")),
-            min_net_spread_bps=_decimal("AGENT_MIN_NET_SPREAD_BPS", env.get("AGENT_MIN_NET_SPREAD_BPS", "10")),
-            slippage_bps=_decimal("AGENT_SLIPPAGE_BPS", env.get("AGENT_SLIPPAGE_BPS", "5")),
+            target_quantity=_decimal(
+                "AGENT_TARGET_QUANTITY", env.get("AGENT_TARGET_QUANTITY", "0.0003")
+            ),
+            min_net_spread_bps=_decimal(
+                "AGENT_MIN_NET_SPREAD_BPS", env.get("AGENT_MIN_NET_SPREAD_BPS", "10")
+            ),
+            slippage_bps=_decimal(
+                "AGENT_SLIPPAGE_BPS", env.get("AGENT_SLIPPAGE_BPS", "5")
+            ),
             max_data_age_seconds=int(env.get("AGENT_MAX_DATA_AGE_SECONDS", "5")),
             max_snapshot_skew_seconds=int(env.get("AGENT_MAX_SNAPSHOT_SKEW_SECONDS", "2")),
-            max_trade_notional=_decimal("AGENT_MAX_TRADE_NOTIONAL", env.get("AGENT_MAX_TRADE_NOTIONAL", "50")),
-            max_exchange_exposure=_decimal("AGENT_MAX_EXCHANGE_EXPOSURE", env.get("AGENT_MAX_EXCHANGE_EXPOSURE", "250")),
-            max_drawdown_pct=_decimal("AGENT_MAX_DRAWDOWN_PCT", env.get("AGENT_MAX_DRAWDOWN_PCT", "3")),
+            max_trade_notional=_decimal(
+                "AGENT_MAX_TRADE_NOTIONAL", env.get("AGENT_MAX_TRADE_NOTIONAL", "50")
+            ),
+            max_exchange_exposure=_decimal(
+                "AGENT_MAX_EXCHANGE_EXPOSURE", env.get("AGENT_MAX_EXCHANGE_EXPOSURE", "250")
+            ),
+            max_drawdown_pct=_decimal(
+                "AGENT_MAX_DRAWDOWN_PCT", env.get("AGENT_MAX_DRAWDOWN_PCT", "3")
+            ),
             max_daily_loss=_decimal("AGENT_MAX_DAILY_LOSS", env.get("AGENT_MAX_DAILY_LOSS", "10")),
             order_book_depth=int(env.get("AGENT_ORDER_BOOK_DEPTH", "20")),
             database_dir=Path(env.get("AGENT_DATABASE_DIR", "data/agent")),
@@ -146,10 +162,19 @@ class AgentCycleReport:
 class AutonomousSpotAgent:
     """Fetch, scan, simulate, risk-check and persist one paper-only cycle."""
 
-    def __init__(self, config: SpotAgentConfig, *, adapters: Iterable[PublicRestAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        config: SpotAgentConfig,
+        *,
+        adapters: Iterable[PublicRestAdapter] | None = None,
+    ) -> None:
         self.config = config
         available = tuple(adapters) if adapters is not None else default_adapters()
-        self.adapters = {adapter.exchange: adapter for adapter in available if adapter.exchange in config.exchanges}
+        self.adapters = {
+            adapter.exchange: adapter
+            for adapter in available
+            if adapter.exchange in config.exchanges
+        }
         missing = set(config.exchanges) - set(self.adapters)
         if missing:
             raise ConfigurationError(f"missing exchange adapters: {', '.join(sorted(missing))}")
@@ -174,7 +199,11 @@ class AutonomousSpotAgent:
         for symbol in self.config.symbols:
             for exchange in self.config.exchanges:
                 try:
-                    books.append(self.adapters[exchange].get_order_book(symbol, limit=self.config.order_book_depth))
+                    books.append(
+                        self.adapters[exchange].get_order_book(
+                            symbol, limit=self.config.order_book_depth
+                        )
+                    )
                 except Exception as exc:
                     failures.append(f"{exchange} {symbol}: {type(exc).__name__}: {exc}")
         if not books:
@@ -195,7 +224,11 @@ class AutonomousSpotAgent:
         """Run one cycle; the persisted paper kill switch must be explicitly armed."""
         self.config.database_dir.mkdir(parents=True, exist_ok=True)
         books = self._fetch_books()
-        scan = self.scanner.scan(books, fee_rates=self.config.fee_rates or {}, target_quantity=self.config.target_quantity)
+        scan = self.scanner.scan(
+            books,
+            fee_rates=self.config.fee_rates or {},
+            target_quantity=self.config.target_quantity,
+        )
         book_by_venue = {(book.exchange, book.symbol): book for book in books}
         decisions: list[dict[str, object]] = []
         opportunities: list[dict[str, str]] = []
@@ -232,15 +265,24 @@ class AutonomousSpotAgent:
                         strategy="autonomous-spot-agent",
                     )
                     if accepted:
-                        states.apply_trade_and_save(ledger, result, portfolio_id=self.config.portfolio_id)
+                        states.apply_trade_and_save(
+                            ledger, result, portfolio_id=self.config.portfolio_id
+                        )
                         approved += 1
                     else:
                         rejected += 1
                         trades.record_rejection(
-                            symbol=item.symbol, buy_exchange=item.buy_exchange, sell_exchange=item.sell_exchange,
+                            symbol=item.symbol,
+                            buy_exchange=item.buy_exchange,
+                            sell_exchange=item.sell_exchange,
                             buy_snapshot_at=buy.timestamp, sell_snapshot_at=sell.timestamp,
-                            reason=decision.reason if not decision.approved else (result.rejection_reason or "simulator rejected"),
-                            context={"risk_metrics": decision.metrics}, strategy="autonomous-spot-agent",
+                            reason=(
+                                decision.reason
+                                if not decision.approved
+                                else (result.rejection_reason or "simulator rejected")
+                            ),
+                            context={"risk_metrics": decision.metrics},
+                            strategy="autonomous-spot-agent",
                         )
                     decisions.append({
                         "symbol": item.symbol, "buy_exchange": item.buy_exchange,
@@ -255,7 +297,8 @@ class AutonomousSpotAgent:
                     trades.record_rejection(
                         symbol=item.symbol, buy_exchange=item.buy_exchange, sell_exchange=item.sell_exchange,
                         buy_snapshot_at=buy.timestamp, sell_snapshot_at=sell.timestamp,
-                        reason=reason, strategy="autonomous-spot-agent",
+                        reason=reason,
+                        strategy="autonomous-spot-agent",
                     )
         return AgentCycleReport(
             scanned_books=len(books), candidate_count=len(scan.opportunities),
