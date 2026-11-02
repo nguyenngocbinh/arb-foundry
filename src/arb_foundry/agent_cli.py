@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 
 from arb_foundry.agent_runtime import AutonomousSpotAgent, SpotAgentConfig
 from arb_foundry.ai_advisor import summarize_cycle
@@ -11,8 +12,9 @@ from arb_foundry.kill_switch import KillSwitchStore
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Arb Foundry autonomous spot paper agent")
-    parser.add_argument("command", choices=("status", "arm-paper", "halt-paper", "run-once"))
+    parser.add_argument("command", choices=("status", "arm-paper", "halt-paper", "run-once", "run-loop"))
     parser.add_argument("--reason", default="operator requested paper simulation")
+    parser.add_argument("--interval-seconds", type=int, default=15)
     args = parser.parse_args()
     config = SpotAgentConfig.from_env()
     config.database_dir.mkdir(parents=True, exist_ok=True)
@@ -29,8 +31,19 @@ def main() -> None:
             }, indent=2))
         return
 
-    report = AutonomousSpotAgent(config).run_once()
-    print(json.dumps({
+    agent = AutonomousSpotAgent(config)
+    while True:
+        try:
+            report = agent.run_once()
+        except KeyboardInterrupt:
+            print("Agent stopped by operator.")
+            return
+        except Exception as exc:
+            print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}, indent=2))
+            if args.command == "run-once":
+                raise
+        else:
+            print(json.dumps({
         "scanned_books": report.scanned_books, "candidate_count": report.candidate_count,
         "simulated_count": report.simulated_count, "approved_count": report.approved_count,
         "rejected_count": report.rejected_count, "opportunities": report.opportunities,
