@@ -278,3 +278,44 @@ corruption/I/O failure semantics, state transitions, and limitations.
 ## Latency, fill probability, and legging-risk research
 
 The optional `arb_foundry.execution_model` module evaluates explicit per-leg latency bounds and fill-probability assumptions with seeded Monte Carlo trials. It reports paired fills, one-leg-only outcomes (legging risk), no-fill rate, and average latency; named scenarios can be compared reproducibly. Values are assumptions unless the caller supplies calibration metadata. The model does not verify empirical evidence, estimate PnL, model partial fills, hedge exposure, or submit orders. See [execution model documentation](docs/execution-model.md).
+
+
+## Autonomous spot agent (paper-only)
+
+A deterministic supervisor now orchestrates the existing scanner, paper simulator,
+portfolio ledger, risk engine, SQLite audit stores and persistent paper kill switch.
+It defaults to BTC/USDT, 0.0003 BTC target size, a 10 bps minimum net spread,
+5 bps adverse slippage, 50 USDT maximum trade notional, 250 USDT per-venue
+exposure, 3% maximum drawdown and 10 USDT maximum daily realized loss. These are
+research defaults, not validated profitability assumptions.
+
+Install the optional OpenAI Agents SDK commentary layer with:
+
+```powershell
+python -m pip install -e ".[dev,ai]"
+```
+
+Configure paper inventory explicitly (this does not read exchange balances):
+
+```powershell
+$env:AGENT_INITIAL_BALANCES='{"binance:USDT":"100","okx:BTC":"0.01","okx:USDT":"100"}'
+$env:AGENT_SYMBOLS='BTC/USDT'
+$env:AGENT_EXCHANGES='binance,okx'
+```
+
+The kill switch starts halted. Explicitly arm paper simulation, then run once or
+as a supervised loop:
+
+```powershell
+arb-foundry-agent status
+arb-foundry-agent arm-paper --reason "approved paper run"
+arb-foundry-agent run-once
+arb-foundry-agent run-loop --interval-seconds 15
+arb-foundry-agent halt-paper --reason "operator stop"
+```
+
+Set `AI_ADVISOR_ENABLED=true` and `OPENAI_API_KEY` to receive optional
+post-cycle Vietnamese commentary. The LLM has no trading tools and cannot
+change fills, inventory or risk decisions. No authenticated exchange endpoints
+or live order submission are implemented. See
+[Autonomous Spot Agent documentation](docs/autonomous-spot-agent.md).
