@@ -54,10 +54,10 @@ def _json_balances(raw: str) -> dict[tuple[str, str], Decimal]:
 class SpotAgentConfig:
     """Small-capital research settings; no private exchange credentials."""
 
-    symbols: tuple[str, ...] = ("BTC/USDT", "ETH/USDT")
+    symbols: tuple[str, ...] = ("BTC/USDT",)
     exchanges: tuple[str, ...] = ("binance", "okx", "bybit", "kucoin")
     fee_rates: dict[str, Decimal] | None = None
-    target_quantity: Decimal = Decimal("0.001")
+    target_quantity: Decimal = Decimal("0.0003")
     min_net_spread_bps: Decimal = Decimal("10")
     slippage_bps: Decimal = Decimal("5")
     max_data_age_seconds: int = 5
@@ -112,10 +112,10 @@ class SpotAgentConfig:
         default_fee = _decimal("AGENT_DEFAULT_FEE_RATE", env.get("AGENT_DEFAULT_FEE_RATE", "0.001"))
         fees = {exchange: default_fee for exchange in exchanges}
         return cls(
-            symbols=_csv(env.get("AGENT_SYMBOLS", "BTC/USDT,ETH/USDT")),
+            symbols=_csv(env.get("AGENT_SYMBOLS", "BTC/USDT")),
             exchanges=exchanges,
             fee_rates=fees,
-            target_quantity=_decimal("AGENT_TARGET_QUANTITY", env.get("AGENT_TARGET_QUANTITY", "0.001")),
+            target_quantity=_decimal("AGENT_TARGET_QUANTITY", env.get("AGENT_TARGET_QUANTITY", "0.0003")),
             min_net_spread_bps=_decimal("AGENT_MIN_NET_SPREAD_BPS", env.get("AGENT_MIN_NET_SPREAD_BPS", "10")),
             slippage_bps=_decimal("AGENT_SLIPPAGE_BPS", env.get("AGENT_SLIPPAGE_BPS", "5")),
             max_data_age_seconds=int(env.get("AGENT_MAX_DATA_AGE_SECONDS", "5")),
@@ -204,6 +204,7 @@ class AutonomousSpotAgent:
              PaperTradeStore(self.config.database_dir / "paper-trades.sqlite3") as trades, \
              PortfolioStateStore(self.config.database_dir / "portfolio.sqlite3") as states:
             switch.require_armed()
+            self.simulator.kill_switch = switch
             ledger = states.load_latest(portfolio_id=self.config.portfolio_id)
             if ledger is None:
                 ledger = PortfolioLedger(self.config.initial_balances or {}, quote_asset="USDT")
